@@ -103,7 +103,7 @@ class GameState:
             ):
                 player_data.ball_touched = True
 
-            self.players.append(player)
+            self.players.append(player_data)
 
     def _decode_player(
         self, player_info: PlayerInfo, index: int, ticks_elapsed: int
