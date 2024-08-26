@@ -16,7 +16,7 @@ setup(
     author="Lucas Emery, Matthew Allen, Jonathan Keegan",
     url="https://rlgym.github.io",
     install_requires=[
-        "numpy>=1.19",
+        "numpy==1.*",
     ],
     python_requires=">=3.7",
     license="Apache 2.0",
