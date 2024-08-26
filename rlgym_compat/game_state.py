@@ -98,7 +98,7 @@ class GameState:
             # Need to set player data ball touched only if player has touched ball in the last tick_skip ticks
             if (
                 self._last_ball_touched_time[i] > 0
-                and packet.game_info.seconds_elapsed - self._last_ball_touched_time
+                and packet.game_info.seconds_elapsed - self._last_ball_touched_time[i]
                 < self.tick_skip_time
             ):
                 player_data.ball_touched = True
