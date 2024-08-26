@@ -129,11 +129,6 @@ class GameState:
                 player_data.on_ground = False
                 if self._air_time_since_jump_ended[index] > 0:
                     self._air_time_since_jump_ended += ticks_elapsed
-                self._air_time_since_jump_ended[index] += ticks_elapsed
-                if (
-                    player_info.jumped
-                ):  # Technically this should only start when you stop holding jump
-                    self._air_time_since_jump_ended[index] += ticks_elapsed
             case AirState.DoubleJumping:
                 self._used_double_jump_or_flip[index] = True
                 player_data.on_ground = False
