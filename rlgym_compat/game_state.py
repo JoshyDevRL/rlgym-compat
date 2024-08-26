@@ -114,7 +114,10 @@ class GameState:
             case AirState.OnGround:
                 if self._ticks_since_jump[index] > 0:
                     self._ticks_since_jump[index] += ticks_elapsed
-                if self._ticks_since_jump[index] > 6 or self._ticks_since_jump == 0:
+                if (
+                    self._ticks_since_jump[index] > 6
+                    or self._ticks_since_jump[index] == 0
+                ):
                     # We must really be on ground
                     self._ticks_since_jump[index] = 0
                     player_data.on_ground = True
