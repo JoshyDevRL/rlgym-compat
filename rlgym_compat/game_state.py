@@ -122,9 +122,11 @@ class GameState:
                     self._ticks_since_jump[index] = 0
                     player_data.on_ground = True
                 self._air_time_since_jump_ended[index] = 0
+                self._used_double_jump_or_flip[index] = False
             case AirState.Jumping:
                 self._ticks_since_jump[index] += ticks_elapsed
                 self._air_time_since_jump_ended[index] = 0
+                self._used_double_jump_or_flip[index] = False
                 if self._ticks_since_jump[index] > 6:
                     # We cannot be on the ground (excluding some really weird circumstances)
                     player_data.on_ground = False
