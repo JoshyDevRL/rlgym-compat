@@ -17,6 +17,7 @@ class GameState:
         self.players: List[PlayerData] = []
         self._total_players = 64
         self._ticks_since_jump = np.zeros(self._total_players)
+        self._ticks_since_flip = np.zeros(self._total_players)
         self._air_time_since_jump_ended = np.zeros(self._total_players)
         self._used_double_jump_or_flip = [False for _ in range(self._total_players)]
         self._last_ball_touched_time = np.zeros(self._total_players)
@@ -33,6 +34,7 @@ class GameState:
         )
         self.last_frame_num = 0
         self.tick_skip_time = tick_skip / 120
+        self.first_decode_call = True
 
     def decode(self, packet: GameTickPacket):
         # Increase number of players' persistent data we are tracking, if necessary
@@ -40,6 +42,10 @@ class GameState:
             new_ticks_since_jump = np.zeros(2 * self._total_players)
             new_ticks_since_jump[: self._total_players] = self._ticks_since_jump
             self._ticks_since_jump = new_ticks_since_jump
+
+            new_ticks_since_flip = np.zeros(2 * self._total_players)
+            new_ticks_since_flip[: self._total_players] = self._ticks_since_flip
+            self._ticks_since_flip = new_ticks_since_flip
 
             new_air_time_since_jump_ended = np.zeros(2 * self._total_players)
             new_air_time_since_jump_ended[: self._total_players] = (
@@ -65,8 +71,11 @@ class GameState:
 
         # Get number of ticks elapsed since last decode() call
         ticks_elapsed = 0
-        if self.last_frame_num > 0:
-            ticks_elapsed = packet.game_info.frame_num - self.last_frame_num
+        if self.first_decode_call:
+            self.first_decode_call = False
+        else:
+            if self.last_frame_num > 0:
+                ticks_elapsed = packet.game_info.frame_num - self.last_frame_num
         self.last_frame_num = packet.game_info.frame_num
 
         # Set score
@@ -79,17 +88,18 @@ class GameState:
         self.inverted_boost_pads[:] = self.boost_pads[::-1]
 
         # Set ball
-        ball = packet.balls[0]
-        self.ball.decode_ball_data(ball.physics)
-        self.inverted_ball.invert(self.ball)
+        if len(packet.balls) > 0:
+            ball = packet.balls[0]
+            self.ball.decode_ball_data(ball.physics)
+            self.inverted_ball.invert(self.ball)
 
-        # Set up touch tracking
-        latest_touch = ball.latest_touch
-        if latest_touch.game_seconds > 0:
-            self.last_touch = latest_touch.player_index
-        self._last_ball_touched_time[latest_touch.player_index] = (
-            latest_touch.game_seconds
-        )
+            # Set up touch tracking
+            latest_touch = ball.latest_touch
+            if latest_touch.game_seconds > 0:
+                self.last_touch = latest_touch.player_index
+            self._last_ball_touched_time[latest_touch.player_index] = (
+                latest_touch.game_seconds
+            )
 
         # Set players
         self.players = []
@@ -120,11 +130,13 @@ class GameState:
                 ):
                     # We must really be on ground
                     self._ticks_since_jump[index] = 0
+                    self._ticks_since_flip[index] = 0
                     player_data.on_ground = True
                 self._air_time_since_jump_ended[index] = 0
                 self._used_double_jump_or_flip[index] = False
             case AirState.Jumping:
                 self._ticks_since_jump[index] += ticks_elapsed
+                self._ticks_since_flip[index] = 0
                 self._air_time_since_jump_ended[index] = 0
                 self._used_double_jump_or_flip[index] = False
                 if self._ticks_since_jump[index] > 6:
@@ -132,13 +144,14 @@ class GameState:
                     player_data.on_ground = False
             case AirState.InAir:
                 player_data.on_ground = False
-                if self._air_time_since_jump_ended[index] > 0:
-                    self._air_time_since_jump_ended += ticks_elapsed
+                if self._ticks_since_jump[index] > 0:
+                    self._air_time_since_jump_ended[index] += ticks_elapsed
             case AirState.DoubleJumping:
                 self._used_double_jump_or_flip[index] = True
                 player_data.on_ground = False
             case AirState.Dodging:
                 self._used_double_jump_or_flip[index] = True
+                self._ticks_since_flip[index] += ticks_elapsed
                 player_data.on_ground = False
 
         player_data.car_id = index
