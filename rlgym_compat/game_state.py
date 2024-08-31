@@ -142,6 +142,8 @@ class GameState:
                 if self._ticks_since_jump[index] > 6:
                     # We cannot be on the ground (excluding some really weird circumstances)
                     player_data.on_ground = False
+                else:
+                    player_data.on_ground = True
             case AirState.InAir:
                 player_data.on_ground = False
                 if self._ticks_since_jump[index] > 0:
