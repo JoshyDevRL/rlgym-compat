@@ -225,49 +225,50 @@ class Car:
 
         self.is_holding_jump = player_info.last_input.jump
 
-        if player_info.air_state == AirState.OnGround:
-            self.on_ground = True
-            self.is_jumping = False
-            self.has_jumped &= self.jump_time < MIN_JUMP_TIME + JUMP_RESET_TIME_PAD
-            self.has_flipped = False
-            self.has_double_jumped = False
-            self.air_time_since_jump = 0
-            self.flip_time = 0
-        elif player_info.air_state == AirState.Jumping:
-            if self._prev_air_state == AirState.OnGround:
-                self.jump_time = 0
-            self.jump_time += TICK_TIME * ticks_elapsed
-            # After pressing jump, it usually takes 6 ticks to leave the ground
-            self.on_ground = self.jump_time > 6 * TICK_TIME
-            self.is_jumping = True
-            self.has_jumped = True
-        elif player_info.air_state == AirState.InAir:
-            self.on_ground = False
-            self.is_jumping = False
-        elif player_info.air_state == AirState.Dodging:
-            self.on_ground = False
-            self.is_jumping = False
-            if self._prev_air_state != AirState.Dodging:
+        match player_info.air_state:
+            case AirState.OnGround:
+                self.on_ground = True
+                self.is_jumping = False
+                self.has_jumped &= self.jump_time < MIN_JUMP_TIME + JUMP_RESET_TIME_PAD
+                self.has_flipped = False
+                self.has_double_jumped = False
+                self.air_time_since_jump = 0
                 self.flip_time = 0
-                dodge_dir = np.array(
-                    [
-                        -player_info.last_input.pitch,
-                        player_info.last_input.yaw + player_info.last_input.roll,
-                        0,
-                    ]
-                )
-                if (dodge_dir < 0.1).all():
-                    dodge_dir *= 0
-                else:
-                    dodge_dir /= np.sqrt(
-                        dodge_dir[0] * dodge_dir[0] + dodge_dir[1] * dodge_dir[1]
+            case AirState.Jumping:
+                if self._prev_air_state == AirState.OnGround:
+                    self.jump_time = 0
+                self.jump_time += TICK_TIME * ticks_elapsed
+                # After pressing jump, it usually takes 6 ticks to leave the ground
+                self.on_ground = self.jump_time > 6 * TICK_TIME
+                self.is_jumping = True
+                self.has_jumped = True
+            case AirState.InAir:
+                self.on_ground = False
+                self.is_jumping = False
+            case AirState.Dodging:
+                self.on_ground = False
+                self.is_jumping = False
+                if self._prev_air_state != AirState.Dodging:
+                    self.flip_time = 0
+                    dodge_dir = np.array(
+                        [
+                            -player_info.last_input.pitch,
+                            player_info.last_input.yaw + player_info.last_input.roll,
+                            0,
+                        ]
                     )
-                self.flip_torque = np.array(-dodge_dir[1], dodge_dir[0], 0)
-                self.has_flipped = True
-        elif player_info.air_state == AirState.DoubleJumping:
-            self.on_ground = False
-            self.is_jumping = False
-            self.has_double_jumped = True
+                    if (dodge_dir < 0.1).all():
+                        dodge_dir *= 0
+                    else:
+                        dodge_dir /= np.sqrt(
+                            dodge_dir[0] * dodge_dir[0] + dodge_dir[1] * dodge_dir[1]
+                        )
+                    self.flip_torque = np.array(-dodge_dir[1], dodge_dir[0], 0)
+                    self.has_flipped = True
+            case AirState.DoubleJumping:
+                self.on_ground = False
+                self.is_jumping = False
+                self.has_double_jumped = True
 
         if self.has_jumped and not self.is_jumping:
             self.air_time_since_jump += time_elapsed
