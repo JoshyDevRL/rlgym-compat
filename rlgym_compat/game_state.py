@@ -1,183 +1,164 @@
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
 import numpy as np
-from rlbot.flat import AirState, FieldInfo, GameTickPacket, PlayerInfo
+from rlbot.flat import (
+    BoostPad,
+    FieldInfo,
+    GameStateType,
+    GameTickPacket,
+    GravityOption,
+    MatchSettings,
+)
 
+from .car import Car
+from .common_values import (
+    BIG_PAD_RECHARGE_SECONDS,
+    BOOST_LOCATIONS,
+    SMALL_PAD_RECHARGE_SECONDS,
+)
+from .game_config import GameConfig
 from .physics_object import PhysicsObject
-from .player_data import PlayerData
+from .utils import create_default_init
 
 
+@dataclass(init=False)
 class GameState:
-    def __init__(self, field_info: FieldInfo, tick_skip=8):
-        self.game_type: int = 0
-        self.blue_score = 0
-        self.orange_score = 0
-        self.last_touch: Optional[int] = -1
+    tick_count: int
+    goal_scored: bool
+    config: GameConfig
+    cars: Dict[int, Car]
+    ball: PhysicsObject
+    _inverted_ball: PhysicsObject
+    boost_pad_timers: np.ndarray
+    _inverted_boost_pad_timers: np.ndarray
 
-        self.players: List[PlayerData] = []
-        self._total_players = 64
-        self._ticks_since_jump = np.zeros(self._total_players)
-        self._ticks_since_flip = np.zeros(self._total_players)
-        self._air_time_since_jump_ended = np.zeros(self._total_players)
-        self._used_double_jump_or_flip = [False for _ in range(self._total_players)]
-        self._last_ball_touched_time = np.zeros(self._total_players)
+    _first_update_call: bool
+    _tick_skip: int
+    _boost_pad_order_mapping: np.ndarray
+    _boost_pads: List[BoostPad]
 
-        self.ball: PhysicsObject = PhysicsObject()
-        self.inverted_ball: PhysicsObject = PhysicsObject()
+    __slots__ = tuple(__annotations__)
 
-        # List of "booleans" (1 or 0)
-        self.boost_pads: np.ndarray = np.zeros(
-            len(field_info.boost_pads), dtype=np.float32
-        )
-        self.inverted_boost_pads: np.ndarray = np.zeros_like(
-            self.boost_pads, dtype=np.float32
-        )
-        self.last_frame_num = 0
-        self.tick_skip_time = tick_skip / 120
-        self.first_decode_call = True
+    exec(create_default_init(__slots__))
 
-    def decode(self, packet: GameTickPacket):
-        # Increase number of players' persistent data we are tracking, if necessary
-        while self._total_players < len(packet.players):
-            new_ticks_since_jump = np.zeros(2 * self._total_players)
-            new_ticks_since_jump[: self._total_players] = self._ticks_since_jump
-            self._ticks_since_jump = new_ticks_since_jump
+    @property
+    def scoring_team(self) -> Optional[int]:
+        if self.goal_scored:
+            return 0 if self.ball.position[1] > 0 else 1
+        return None
 
-            new_ticks_since_flip = np.zeros(2 * self._total_players)
-            new_ticks_since_flip[: self._total_players] = self._ticks_since_flip
-            self._ticks_since_flip = new_ticks_since_flip
+    @property
+    def inverted_ball(self) -> PhysicsObject:
+        if self._inverted_ball is None:
+            self._inverted_ball = self.ball.inverted()
+        return self._inverted_ball
 
-            new_air_time_since_jump_ended = np.zeros(2 * self._total_players)
-            new_air_time_since_jump_ended[: self._total_players] = (
-                self._air_time_since_jump_ended
+    @property
+    def inverted_boost_pad_timers(self) -> np.ndarray:
+        if self._inverted_boost_pad_timers is None:
+            self._inverted_boost_pad_timers = np.ascontiguousarray(
+                self.boost_pad_timers[::-1]
             )
-            self._air_time_since_jump_ended = new_air_time_since_jump_ended
+        return self._inverted_boost_pad_timers
 
-            new_last_ball_touched_time = np.zeros(2 * self._total_players)
-            new_last_ball_touched_time[: self._total_players] = (
-                self._last_ball_touched_time
-            )
-            self._last_ball_touched_time = new_last_ball_touched_time
-
-            new_used_double_jump_or_flip = [
-                False for _ in range(2 * self._total_players)
-            ]
-            new_used_double_jump_or_flip[: self._total_players] = (
-                self._used_double_jump_or_flip
-            )
-            self._used_double_jump_or_flip = new_used_double_jump_or_flip
-
-            self._total_players *= 2
-
-        # Get number of ticks elapsed since last decode() call
-        ticks_elapsed = 0
-        if self.first_decode_call:
-            self.first_decode_call = False
+    @staticmethod
+    def create_compat_game_state(
+        field_info: FieldInfo,
+        match_settings=MatchSettings(),
+        tick_skip=8,
+        standard_map=True,
+    ):
+        state = GameState()
+        state._tick_skip = tick_skip
+        state.tick_count = 0
+        state.goal_scored = False
+        state.config = GameConfig()
+        state.config.boost_consumption = 1  # Not modifiable
+        state.config.dodge_deadzone = 0.5  # Not modifiable
+        if match_settings.mutator_settings is not None:
+            match match_settings.mutator_settings.gravity_option:
+                case GravityOption.Low:
+                    gravity = -325
+                case GravityOption.Default:
+                    gravity = -650
+                case GravityOption.High:
+                    gravity = -1137.5
+                case GravityOption.Super_High:
+                    gravity = -3250
+                case GravityOption.Reverse:
+                    gravity = 650
+            state.config.gravity = gravity / -650.0
         else:
-            if self.last_frame_num > 0:
-                ticks_elapsed = packet.game_info.frame_num - self.last_frame_num
-        self.last_frame_num = packet.game_info.frame_num
+            state.config.gravity = 1
+        state.cars = {}
+        state.ball = PhysicsObject.create_compat_physics_object()
+        state.boost_pad_timers = np.zeros(len(field_info.boost_pads), dtype=np.float32)
+        if standard_map:
+            boost_locations = np.array(BOOST_LOCATIONS)
+            state._boost_pad_order_mapping = np.zeros(
+                len(field_info.boost_pads), dtype=np.int32
+            )
+            for rlbot_boost_pad_idx, boost_pad in enumerate(field_info.boost_pads):
+                loc = np.array(
+                    [boost_pad.location.x, boost_pad.location.y, boost_pad.location.z]
+                )
+                similar_vals = np.isclose(boost_locations, loc, atol=2).all(axis=1)
+                candidate_idx = np.argmax(similar_vals)
+                assert similar_vals[
+                    candidate_idx
+                ], f"Boost pad at location {loc} doesn't match any in the standard map (see BOOST_LOCATIONS in common_values.py)"
+                state._boost_pad_order_mapping[rlbot_boost_pad_idx] = candidate_idx
+        else:
+            state._boost_pad_order_mapping = [
+                idx for idx in range(len(field_info.boost_pads))
+            ]
+        state._boost_pads = list(field_info.boost_pads)
+        state._first_update_call = True
+        return state
 
-        # Set score
-        self.blue_score = packet.teams[0].score
-        self.orange_score = packet.teams[1].score
+    def update(self, packet: GameTickPacket):
+        doing_first_call = False
+        if self._first_update_call:
+            self.tick_count = packet.game_info.frame_num
+            self._first_update_call = False
+            doing_first_call = True
 
-        # Set boost pads
-        for i, pad in enumerate(packet.boost_pad_states):
-            self.boost_pads[i] = pad.is_active
-        self.inverted_boost_pads[:] = self.boost_pads[::-1]
+        # Initialize new players
+        for player_index, player_info in enumerate(packet.players):
+            if player_info.spawn_id not in self.cars:
+                self.cars[player_info.spawn_id] = Car.create_compat_car(
+                    packet, player_index, self._tick_skip
+                )
 
-        # Set ball
+        ticks_elapsed = packet.game_info.frame_num - self.tick_count
+        # Nothing to do
+        if ticks_elapsed == 0 and not doing_first_call:
+            return
+
+        self.goal_scored = packet.game_info.game_state_type == GameStateType.GoalScored
+
         if len(packet.balls) > 0:
             ball = packet.balls[0]
-            self.ball.decode_ball_data(ball.physics)
-            self.inverted_ball.invert(self.ball)
+        else:
+            ball = None
 
-            # Set up touch tracking
-            latest_touch = ball.latest_touch
-            if latest_touch.game_seconds > 0:
-                self.last_touch = latest_touch.player_index
-            self._last_ball_touched_time[latest_touch.player_index] = (
-                latest_touch.game_seconds
+        for player_index, player_info in enumerate(packet.players):
+            self.cars[player_info.spawn_id].update(
+                player_info,
+                (
+                    None
+                    if ball is None or ball.latest_touch.player_index != player_index
+                    else ball.latest_touch
+                ),
+                ticks_elapsed,
             )
+        self.ball.update(ball.physics)
 
-        # Set players
-        self.players = []
-        for i, player in enumerate(packet.players):
-            player_data = self._decode_player(player, i, ticks_elapsed)
-            # Need to set player data ball touched only if player has touched ball in the last tick_skip ticks
-            if (
-                self._last_ball_touched_time[i] > 0
-                and packet.game_info.seconds_elapsed - self._last_ball_touched_time[i]
-                < self.tick_skip_time
-            ):
-                player_data.ball_touched = True
-
-            self.players.append(player_data)
-
-    def _decode_player(
-        self, player_info: PlayerInfo, index: int, ticks_elapsed: int
-    ) -> PlayerData:
-        player_data = PlayerData()
-
-        match player_info.air_state:
-            case AirState.OnGround:
-                if self._ticks_since_jump[index] > 0:
-                    self._ticks_since_jump[index] += ticks_elapsed
-                if (
-                    self._ticks_since_jump[index] > 6
-                    or self._ticks_since_jump[index] == 0
-                ):
-                    # We must really be on ground
-                    self._ticks_since_jump[index] = 0
-                    self._ticks_since_flip[index] = 0
-                    player_data.on_ground = True
-                self._air_time_since_jump_ended[index] = 0
-                self._used_double_jump_or_flip[index] = False
-            case AirState.Jumping:
-                self._ticks_since_jump[index] += ticks_elapsed
-                self._ticks_since_flip[index] = 0
-                self._air_time_since_jump_ended[index] = 0
-                self._used_double_jump_or_flip[index] = False
-                if self._ticks_since_jump[index] > 6:
-                    # We cannot be on the ground (excluding some really weird circumstances)
-                    player_data.on_ground = False
-                else:
-                    player_data.on_ground = True
-            case AirState.InAir:
-                player_data.on_ground = False
-                if self._ticks_since_jump[index] > 0:
-                    self._air_time_since_jump_ended[index] += ticks_elapsed
-            case AirState.DoubleJumping:
-                self._used_double_jump_or_flip[index] = True
-                player_data.on_ground = False
-            case AirState.Dodging:
-                self._used_double_jump_or_flip[index] = True
-                self._ticks_since_flip[index] += ticks_elapsed
-                player_data.on_ground = False
-
-        player_data.car_id = index
-        player_data.team_num = player_info.team
-        player_data.match_goals = player_info.score_info.goals
-        player_data.match_saves = player_info.score_info.saves
-        player_data.match_shots = player_info.score_info.shots
-        player_data.match_demolishes = player_info.score_info.demolitions
-        if (
-            player_data.boost_amount < player_info.boost / 100
-        ):  # This isn't perfect but with decent fps it'll work
-            if player_data.boost_pickups == -1:
-                player_data.boost_pickups = 1
-            else:
-                player_data.boost_pickups += 1
-        player_data.is_demoed = player_info.demolished_timeout > 0
-        player_data.ball_touched = False
-        player_data.has_jump = self._ticks_since_jump[index] == 0
-        player_data.has_flip = (
-            self._air_time_since_jump_ended[index] < 150
-            and not self._used_double_jump_or_flip[index]
-        )
-        player_data.boost_amount = player_info.boost / 100
-        player_data.car_data.decode_car_data(player_info.physics)
-        player_data.inverted_car_data.invert(player_data.car_data)
-
-        return player_data
+        for boost_pad_index, boost_pad_state in enumerate(packet.boost_pad_states):
+            boost_pad = self._boost_pads[boost_pad_index]
+            self.boost_pad_timers[self._boost_pad_order_mapping[boost_pad_index]] = (
+                BIG_PAD_RECHARGE_SECONDS * boost_pad.is_full_boost
+                + SMALL_PAD_RECHARGE_SECONDS * (not boost_pad.is_full_boost)
+                - boost_pad_state.timer
+            ) * (not boost_pad_state.is_active)

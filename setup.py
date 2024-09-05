@@ -18,7 +18,7 @@ setup(
     install_requires=[
         "numpy==1.*",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.11",
     license="Apache 2.0",
     license_file="LICENSE",
     keywords=["rocket-league", "gym", "reinforcement-learning"],
