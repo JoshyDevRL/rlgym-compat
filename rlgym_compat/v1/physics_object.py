@@ -49,9 +49,6 @@ class PhysicsObject:
         self.angular_velocity = self._vector_to_numpy(car_data.angular_velocity)
         self._rotation_mtx = self.rotation_mtx()
         self.quaternion = rotation_to_quaternion(self._rotation_mtx)
-        # self._rotation_mtx = self.rotation_mtx()
-        # # self._has_computed_rot_mtx = True
-        # self.quaternion = np.ones(4) * 1000  # try to break it if quat is used since it isn't accurate
 
     def decode_ball_data(self, ball_data: flat.Physics):
         self.position = self._vector_to_numpy(ball_data.location)
@@ -65,8 +62,6 @@ class PhysicsObject:
         self.angular_velocity = other.angular_velocity * self._invert_vec
         self._rotation_mtx = self.rotation_mtx()
         self.quaternion = rotation_to_quaternion(self._rotation_mtx)
-        # self._rotation_mtx = self.rotation_mtx()
-        # self._has_computed_rot_mtx = True
 
     # pitch, yaw, roll
     def euler_angles(self) -> np.ndarray:
