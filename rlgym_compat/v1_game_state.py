@@ -1,11 +1,16 @@
 from typing import Dict, Optional
 
 import numpy as np
-from rlbot.flat import FieldInfo, GameTickPacket, MatchSettings, Physics, PlayerInfo
+from rlbot.flat import (
+    FieldInfo,
+    GameStateType,
+    GameTickPacket,
+    MatchSettings,
+    PlayerInfo,
+)
 
 from .common_values import BLUE_TEAM, ORANGE_TEAM
 from .game_state import GameState
-from .physics_object import PhysicsObject
 from .v1.physics_object import PhysicsObject as V1PhysicsObject
 from .v1.player_data import PlayerData as V1PlayerData
 
@@ -21,6 +26,7 @@ class V1GameState:
         self._game_state = GameState.create_compat_game_state(
             field_info, match_settings, tick_skip, standard_map
         )
+        self.game_type = int(match_settings.game_mode)
         self.blue_score = 0
         self.orange_score = 0
         self.last_touch: Optional[int] = -1
@@ -42,54 +48,46 @@ class V1GameState:
 
         return players
 
-    @players.setter
-    def players(self, value):
-        raise NotImplementedError
-
     @property
     def ball(self):
         return V1PhysicsObject.create_from_v2(self._game_state.ball)
-
-    @ball.setter
-    def ball(self, value):
-        raise NotImplementedError
 
     @property
     def inverted_ball(self):
         return V1PhysicsObject.create_from_v2(self._game_state.inverted_ball)
 
-    @inverted_ball.setter
-    def inverted_ball(self, value):
-        raise NotImplementedError
-
     @property
     def boost_pads(self):
-        return self._game_state.boost_pad_timers == 0
-
-    @boost_pads.setter
-    def boost_pads(self, value):
-        raise NotImplementedError
+        return (self._game_state.boost_pad_timers == 0).astype(np.float32)
 
     @property
     def inverted_boost_pads(self):
-        return self._game_state.inverted_boost_pad_timers == 0
-
-    @inverted_boost_pads.setter
-    def inverted_boost_pads(self, value):
-        raise NotImplementedError
+        return (self._game_state.inverted_boost_pad_timers == 0).astype(np.float32)
 
     def update(self, packet: GameTickPacket):
         self.blue_score = packet.teams[BLUE_TEAM].score
         self.orange_score = packet.teams[ORANGE_TEAM].score
         if len(packet.balls) > 0:
-            self.last_touch = packet.balls[0].latest_touch.player_index
+            ball = packet.balls[0]
+            if ball.latest_touch.player_name:
+                self.last_touch = packet.balls[0].latest_touch.player_index
+        old_boost_amounts = {
+            **{p.spawn_id: p.boost / 100 for p in packet.players},
+            **{k: v.boost_amount for (k, v) in self._game_state.cars.items()},
+        }
+        self._game_state.update(packet)
         for player_info in packet.players:
             if player_info.spawn_id not in self._boost_pickups:
                 self._boost_pickups[player_info.spawn_id] = 0
+
             if (
-                self._game_state.cars[player_info.spawn_id].boost_amount
-                < player_info.boost / 100
-            ):  # This isn't perfect but with decent fps it'll work
+                packet.game_info.game_state_type == GameStateType.Active
+                or packet.game_info.game_state_type == GameStateType.Kickoff
+            ) and old_boost_amounts[
+                player_info.spawn_id
+            ] < player_info.boost / 100:  # This isn't perfect but with decent fps it'll work
                 self._boost_pickups[player_info.spawn_id] += 1
+                print(
+                    f"Increased boost for spawn_id {player_info.spawn_id} on tick {packet.game_info.frame_num}"
+                )
             self._player_infos[player_info.spawn_id] = player_info
-        self._game_state.update(packet)

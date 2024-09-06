@@ -38,6 +38,8 @@ class PhysicsObject:
         physics_object = PhysicsObject()
         physics_object.position = v2_physics_object.position
         physics_object.quaternion = v2_physics_object.quaternion
+        physics_object._euler_angles = v2_physics_object.euler_angles
+        physics_object._rotation_mtx = v2_physics_object.rotation_mtx
         physics_object.linear_velocity = v2_physics_object.linear_velocity
         physics_object.angular_velocity = v2_physics_object.angular_velocity
         return physics_object

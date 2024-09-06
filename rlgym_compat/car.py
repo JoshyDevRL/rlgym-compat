@@ -163,6 +163,7 @@ class Car:
         car.supersonic_time = 0
         car.boost_active_time = 0
         car.handbrake = 0
+        car.has_jumped = False
         car.jump_time = 0
         car._tick_skip = tick_skip
         car._ball_touch_ticks = deque([False] * tick_skip)
@@ -181,9 +182,9 @@ class Car:
         time_elapsed = TICK_TIME * ticks_elapsed
         self._game_seconds += time_elapsed
 
-        for _ in range(ticks_elapsed):
+        for _ in range(min(self._tick_skip, ticks_elapsed)):
             self._ball_touch_ticks.popleft()
-        for _ in range(ticks_elapsed):
+        for _ in range(min(self._tick_skip, ticks_elapsed)):
             self._ball_touch_ticks.append(False)
         if latest_touch is not None:
             ticks_since_touch = int(
@@ -263,7 +264,7 @@ class Car:
                         dodge_dir /= np.sqrt(
                             dodge_dir[0] * dodge_dir[0] + dodge_dir[1] * dodge_dir[1]
                         )
-                    self.flip_torque = np.array(-dodge_dir[1], dodge_dir[0], 0)
+                    self.flip_torque = np.array([-dodge_dir[1], dodge_dir[0], 0])
                     self.has_flipped = True
             case AirState.DoubleJumping:
                 self.on_ground = False

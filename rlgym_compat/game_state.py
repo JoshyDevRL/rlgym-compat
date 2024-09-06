@@ -12,11 +12,7 @@ from rlbot.flat import (
 )
 
 from .car import Car
-from .common_values import (
-    BIG_PAD_RECHARGE_SECONDS,
-    BOOST_LOCATIONS,
-    SMALL_PAD_RECHARGE_SECONDS,
-)
+from .common_values import BOOST_LOCATIONS
 from .game_config import GameConfig
 from .physics_object import PhysicsObject
 from .utils import create_default_init
@@ -35,6 +31,7 @@ class GameState:
 
     _first_update_call: bool
     _tick_skip: int
+    # Unless something changes, this mapping will be [14,10,7,12,8,11,29,4,3,15,18,30,1,2,5,6,9,20,19,22,21,23,25,32,31,26,27,24,28,33,17,13,16,0] for the standard map.
     _boost_pad_order_mapping: np.ndarray
     _boost_pads: List[BoostPad]
 
@@ -50,16 +47,14 @@ class GameState:
 
     @property
     def inverted_ball(self) -> PhysicsObject:
-        if self._inverted_ball is None:
-            self._inverted_ball = self.ball.inverted()
+        self._inverted_ball = self.ball.inverted()
         return self._inverted_ball
 
     @property
     def inverted_boost_pad_timers(self) -> np.ndarray:
-        if self._inverted_boost_pad_timers is None:
-            self._inverted_boost_pad_timers = np.ascontiguousarray(
-                self.boost_pad_timers[::-1]
-            )
+        self._inverted_boost_pad_timers = np.ascontiguousarray(
+            self.boost_pad_timers[::-1]
+        )
         return self._inverted_boost_pad_timers
 
     @staticmethod
@@ -103,7 +98,9 @@ class GameState:
                 loc = np.array(
                     [boost_pad.location.x, boost_pad.location.y, boost_pad.location.z]
                 )
-                similar_vals = np.isclose(boost_locations, loc, atol=2).all(axis=1)
+                similar_vals = np.isclose(boost_locations[:, :2], loc[:2], atol=2).all(
+                    axis=1
+                )
                 candidate_idx = np.argmax(similar_vals)
                 assert similar_vals[
                     candidate_idx
@@ -140,6 +137,7 @@ class GameState:
 
         if len(packet.balls) > 0:
             ball = packet.balls[0]
+            self.ball.update(ball.physics)
         else:
             ball = None
 
@@ -153,12 +151,8 @@ class GameState:
                 ),
                 ticks_elapsed,
             )
-        self.ball.update(ball.physics)
 
         for boost_pad_index, boost_pad_state in enumerate(packet.boost_pad_states):
-            boost_pad = self._boost_pads[boost_pad_index]
             self.boost_pad_timers[self._boost_pad_order_mapping[boost_pad_index]] = (
-                BIG_PAD_RECHARGE_SECONDS * boost_pad.is_full_boost
-                + SMALL_PAD_RECHARGE_SECONDS * (not boost_pad.is_full_boost)
-                - boost_pad_state.timer
-            ) * (not boost_pad_state.is_active)
+                boost_pad_state.timer
+            )
