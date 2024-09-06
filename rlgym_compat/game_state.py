@@ -3,6 +3,7 @@ from typing import List, Optional
 import numpy as np
 from rlbot.flat import AirState, FieldInfo, GameTickPacket, PlayerInfo
 
+from .common_values import BOOST_LOCATIONS
 from .physics_object import PhysicsObject
 from .player_data import PlayerData
 
@@ -35,6 +36,23 @@ class GameState:
         self.last_frame_num = 0
         self.tick_skip_time = tick_skip / 120
         self.first_decode_call = True
+
+        boost_locations = np.array(BOOST_LOCATIONS)
+        self._boost_pad_order_mapping = np.zeros(
+            len(field_info.boost_pads), dtype=np.int32
+        )
+        for rlbot_boost_pad_idx, boost_pad in enumerate(field_info.boost_pads):
+            loc = np.array(
+                [boost_pad.location.x, boost_pad.location.y, boost_pad.location.z]
+            )
+            similar_vals = np.isclose(boost_locations[:, :2], loc[:2], atol=2).all(
+                axis=1
+            )
+            candidate_idx = np.argmax(similar_vals)
+            assert similar_vals[
+                candidate_idx
+            ], f"Boost pad at location {loc} doesn't match any in the standard map (see BOOST_LOCATIONS in common_values.py)"
+            self._boost_pad_order_mapping[rlbot_boost_pad_idx] = candidate_idx
 
     def decode(self, packet: GameTickPacket):
         # Increase number of players' persistent data we are tracking, if necessary
@@ -84,7 +102,7 @@ class GameState:
 
         # Set boost pads
         for i, pad in enumerate(packet.boost_pad_states):
-            self.boost_pads[i] = pad.is_active
+            self.boost_pads[self._boost_pad_order_mapping[i]] = pad.is_active
         self.inverted_boost_pads[:] = self.boost_pads[::-1]
 
         # Set ball
