@@ -81,13 +81,9 @@ class V1GameState:
                 self._boost_pickups[player_info.spawn_id] = 0
 
             if (
-                packet.game_info.game_state_type == GameStateType.Active
-                or packet.game_info.game_state_type == GameStateType.Kickoff
-            ) and old_boost_amounts[
-                player_info.spawn_id
-            ] < player_info.boost / 100:  # This isn't perfect but with decent fps it'll work
+                packet.game_info.game_state_type
+                in (GameStateType.Active, GameStateType.Kickoff)
+                and old_boost_amounts[player_info.spawn_id] < player_info.boost / 100
+            ):  # This isn't perfect but with decent fps it'll work
                 self._boost_pickups[player_info.spawn_id] += 1
-                print(
-                    f"Increased boost for spawn_id {player_info.spawn_id} on tick {packet.game_info.frame_num}"
-                )
             self._player_infos[player_info.spawn_id] = player_info

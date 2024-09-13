@@ -13,6 +13,7 @@ from rlbot.flat import (
 
 from .car import Car
 from .common_values import BOOST_LOCATIONS
+from .extra_info import ExtraPacketInfo
 from .game_config import GameConfig
 from .physics_object import PhysicsObject
 from .utils import create_default_init
@@ -114,7 +115,11 @@ class GameState:
         state._first_update_call = True
         return state
 
-    def update(self, packet: GameTickPacket):
+    def update(
+        self,
+        packet: GameTickPacket,
+        extra_packet_info: Optional[ExtraPacketInfo] = None,
+    ):
         doing_first_call = False
         if self._first_update_call:
             self.tick_count = packet.game_info.frame_num
@@ -144,12 +149,17 @@ class GameState:
         for player_index, player_info in enumerate(packet.players):
             self.cars[player_info.spawn_id].update(
                 player_info,
-                (
+                extra_player_info=(
+                    None
+                    if extra_packet_info is None
+                    else extra_packet_info.players[player_index]
+                ),
+                latest_touch=(
                     None
                     if ball is None or ball.latest_touch.player_index != player_index
                     else ball.latest_touch
                 ),
-                ticks_elapsed,
+                ticks_elapsed=ticks_elapsed,
             )
 
         for boost_pad_index, boost_pad_state in enumerate(packet.boost_pad_states):

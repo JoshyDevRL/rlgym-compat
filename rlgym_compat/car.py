@@ -24,6 +24,7 @@ from .common_values import (
     TICK_TIME,
     TICKS_PER_SECOND,
 )
+from .extra_info import ExtraPlayerInfo
 from .physics_object import PhysicsObject
 from .utils import compare_hitbox_shape, create_default_init
 
@@ -166,7 +167,7 @@ class Car:
         car.has_jumped = False
         car.jump_time = 0
         car._tick_skip = tick_skip
-        car._ball_touch_ticks = deque([False] * tick_skip)
+        car._ball_touch_ticks = deque([False] * tick_skip, tick_skip)
         car._prev_air_state = player_info.air_state
         car._game_seconds = packet.game_info.seconds_elapsed
         car.flip_torque = np.zeros(3)
@@ -176,14 +177,16 @@ class Car:
     # Latest touch should only be passed if the player index of the touch is equal to the current player. Player indices can change in a packet
     # so this is not the responsibility of the Car.
     def update(
-        self, player_info: PlayerInfo, latest_touch: Optional[Touch], ticks_elapsed: int
+        self,
+        player_info: PlayerInfo,
+        extra_player_info: Optional[ExtraPlayerInfo] = None,
+        latest_touch: Optional[Touch] = None,
+        ticks_elapsed: int = 1,
     ):
         # Assuming hitbox_type and team_num can't change without updating spawn id (and therefore creating new compat car)
         time_elapsed = TICK_TIME * ticks_elapsed
         self._game_seconds += time_elapsed
 
-        for _ in range(min(self._tick_skip, ticks_elapsed)):
-            self._ball_touch_ticks.popleft()
         for _ in range(min(self._tick_skip, ticks_elapsed)):
             self._ball_touch_ticks.append(False)
         if latest_touch is not None:
@@ -276,16 +279,28 @@ class Car:
         else:
             self.air_time_since_jump = 0
 
+        # Override with value based on dodge_timeout if it is active, since it is more accurate
+        if player_info.dodge_timeout != -1:
+            self.air_time_since_jump = DOUBLEJUMP_MAX_DELAY - player_info.dodge_timeout
+
         if self.has_flipped:
             self.flip_time += time_elapsed
 
-        # Cannot handle these:
-        # self.bump_victim_id
-        # self.is_autoflipping
-        # self.autoflip_timer
-        # self.autoflip_direction
-
         self.physics.update(player_info.physics)
         self._inverted_physics = self.physics.inverted()
+
+        # Override with extra info if available
+        if extra_player_info is not None:
+            self.on_ground = extra_player_info.on_ground
+            self.handbrake = extra_player_info.handbrake
+            self.ball_touches = extra_player_info.ball_touches
+            self.bump_victim_id = (
+                extra_player_info.car_contact_id
+                if extra_player_info.car_contact_cooldown_timer > 0
+                else None
+            )
+            self.is_autoflipping = extra_player_info.is_autoflipping
+            self.autoflip_timer = extra_player_info.autoflip_timer
+            self.autoflip_direction = extra_player_info.autoflip_direction
 
         self._prev_air_state = player_info.air_state
