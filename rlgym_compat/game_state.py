@@ -118,7 +118,7 @@ class GameState:
     def update(
         self,
         packet: GameTickPacket,
-        extra_packet_info: Optional[ExtraPacketInfo] = None,
+        extra_info: Optional[ExtraPacketInfo] = None,
     ):
         doing_first_call = False
         if self._first_update_call:
@@ -134,6 +134,7 @@ class GameState:
                 )
 
         ticks_elapsed = packet.game_info.frame_num - self.tick_count
+        self.tick_count = packet.game_info.frame_num
         # Nothing to do
         if ticks_elapsed == 0 and not doing_first_call:
             return
@@ -150,9 +151,7 @@ class GameState:
             self.cars[player_info.spawn_id].update(
                 player_info,
                 extra_player_info=(
-                    None
-                    if extra_packet_info is None
-                    else extra_packet_info.players[player_index]
+                    None if extra_info is None else extra_info.players[player_index]
                 ),
                 latest_touch=(
                     None

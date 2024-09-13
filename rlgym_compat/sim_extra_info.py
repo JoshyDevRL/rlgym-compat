@@ -26,7 +26,7 @@ from .math import euler_to_rotation
 from .utils import rotator_to_numpy, vector_to_numpy
 
 
-class SimOverrider:
+class SimExtraInfo:
     def __init__(
         self, field_info: FieldInfo, match_settings=MatchSettings(), tick_skip=8
     ):
@@ -166,10 +166,14 @@ class SimOverrider:
     def _get_extra_player_info(self, car) -> ExtraPlayerInfo:
         car_state = car.get_state()
         return ExtraPlayerInfo(
-            on_ground=car_state.on_ground,
+            on_ground=car_state.is_on_ground,
             handbrake=car_state.handbrake_val,
             ball_touches=sum(self._touches[car.id]),
-            car_contact_id=self._car_id_spawn_id_map[car_state.car_contact_id],
+            car_contact_id=(
+                0
+                if car_state.car_contact_id == 0
+                else self._car_id_spawn_id_map[car_state.car_contact_id]
+            ),
             car_contact_cooldown_timer=car_state.car_contact_cooldown_timer,
             is_autoflipping=car_state.is_auto_flipping,
             autoflip_timer=car_state.auto_flip_timer,
@@ -183,13 +187,15 @@ class SimOverrider:
         return ExtraPacketInfo(players=players, ball=self._get_extra_ball_info())
 
     def get_extra_info(self, packet: GameTickPacket) -> ExtraPacketInfo:
+        self._update_sim_cars(packet)
         if self._first_call:
+            self._first_call = False
             self._tick_count = packet.game_info.frame_num
             self._set_sim_state(packet)
             return self._get_extra_packet_info()
 
-        self._update_sim_cars(packet)
         ticks_elapsed = packet.game_info.frame_num - self._tick_count
+        self._tick_count = packet.game_info.frame_num
         spawn_id_player_info_map = {
             player_info.spawn_id: player_info for player_info in packet.players
         }
@@ -217,7 +223,8 @@ class SimOverrider:
 
     def _set_ball_state(self, packet: GameTickPacket):
         if len(packet.balls) > 0:
-            ball_state = self._arena.ball.get_state()
+            ball = self._arena.ball
+            ball_state = ball.get_state()
             packet_ball = packet.balls[0]
             packet_ball_physics = packet_ball.physics
             if packet_ball.latest_touch.game_seconds != 0:
@@ -238,6 +245,7 @@ class SimOverrider:
             ball_state.ang_vel = rsim.Vec(
                 *vector_to_numpy(packet_ball_physics.angular_velocity)
             )
+            ball.set_state(ball_state)
 
     def _set_car_state(self, player_info: PlayerInfo, new: bool):
         if new:
@@ -262,12 +270,13 @@ class SimOverrider:
         )
         car_state.boost = player_info.boost
         car_state.is_supersonic = player_info.is_supersonic
-        car_state.is_demoed = player_info.demolished_timeout == -1
+        car_state.is_demoed = player_info.demolished_timeout != -1
         car_state.demo_respawn_timer = (
             player_info.demolished_timeout * car_state.is_demoed
         )
+        car.set_state(car_state)
         self._touches = {
-            car_state.id: deque([False] * self._tick_skip, self._tick_skip),
+            car.id: deque([False] * self._tick_skip, self._tick_skip),
             **self._touches,
         }
         self._car_id_spawn_id_map[car.id] = player_info.spawn_id
@@ -282,6 +291,11 @@ class SimOverrider:
         )
 
     def _update_sim_cars(self, packet: GameTickPacket):
+        # Add data cars that are newly in the packet
+        for player_info in packet.players:
+            if self._is_new_car(player_info):
+                self._set_car_state(player_info, True)
+
         # Remove data for cars that are no longer in the packet
         packet_car_ids = [
             self._spawn_id_car_id_map[player_info.spawn_id]
@@ -296,11 +310,6 @@ class SimOverrider:
                     self._spawn_id_car_id_map.pop(spawn_id, None)
                 self._touches.pop(car_id, None)
                 self._ball_touched_on_tick.pop(car_id, None)
-
-        # Add data cars that are newly in the packet
-        for player_info in packet.players:
-            if self._is_new_car(player_info):
-                self._set_car_state(player_info, True)
 
     def _set_sim_state(self, packet: GameTickPacket):
         for player_info in packet.players:

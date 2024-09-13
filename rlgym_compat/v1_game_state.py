@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 from rlbot.flat import (
@@ -10,6 +10,7 @@ from rlbot.flat import (
 )
 
 from .common_values import BLUE_TEAM, ORANGE_TEAM
+from .extra_info import ExtraPacketInfo
 from .game_state import GameState
 from .v1.physics_object import PhysicsObject as V1PhysicsObject
 from .v1.player_data import PlayerData as V1PlayerData
@@ -32,21 +33,28 @@ class V1GameState:
         self.last_touch: Optional[int] = -1
         self._player_infos: Dict[int, PlayerInfo] = {}
         self._boost_pickups: Dict[int, int] = {}
+        self._players: Optional[List[V1PlayerData]] = None
 
     @property
     def players(self):
-        players = []
-        for car_id, (spawn_idx, car) in enumerate(self._game_state.cars.items()):
-            players.append(
-                V1PlayerData.create_from_v2(
-                    car,
-                    self._player_infos[spawn_idx],
-                    car_id,
-                    self._boost_pickups[spawn_idx],
+        if self._players is None:
+            players: List[V1PlayerData] = []
+            for spawn_idx, car in self._game_state.cars.items():
+                players.append(
+                    V1PlayerData.create_from_v2(
+                        car,
+                        self._player_infos[spawn_idx],
+                        spawn_idx,
+                        self._boost_pickups[spawn_idx],
+                    )
                 )
-            )
 
-        return players
+            return players
+        return self._players
+
+    @players.setter
+    def players(self, value: List[V1PlayerData]):
+        self._players = value
 
     @property
     def ball(self):
@@ -64,7 +72,10 @@ class V1GameState:
     def inverted_boost_pads(self):
         return (self._game_state.inverted_boost_pad_timers == 0).astype(np.float32)
 
-    def update(self, packet: GameTickPacket):
+    def update(
+        self, packet: GameTickPacket, extra_info: Optional[ExtraPacketInfo] = None
+    ):
+        self._players = None
         self.blue_score = packet.teams[BLUE_TEAM].score
         self.orange_score = packet.teams[ORANGE_TEAM].score
         if len(packet.balls) > 0:
@@ -75,7 +86,7 @@ class V1GameState:
             **{p.spawn_id: p.boost / 100 for p in packet.players},
             **{k: v.boost_amount for (k, v) in self._game_state.cars.items()},
         }
-        self._game_state.update(packet)
+        self._game_state.update(packet, extra_info)
         for player_info in packet.players:
             if player_info.spawn_id not in self._boost_pickups:
                 self._boost_pickups[player_info.spawn_id] = 0

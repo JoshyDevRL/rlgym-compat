@@ -279,9 +279,9 @@ class Car:
         else:
             self.air_time_since_jump = 0
 
-        # Override with value based on dodge_timeout if it is active, since it is more accurate
-        if player_info.dodge_timeout != -1:
-            self.air_time_since_jump = DOUBLEJUMP_MAX_DELAY - player_info.dodge_timeout
+        # Override with value based on dodge_timeout if it is active, since it is more accurate TODO: it doesn't account for resets so commenting it out
+        # if player_info.dodge_timeout != -1:
+        #     self.air_time_since_jump = DOUBLEJUMP_MAX_DELAY - player_info.dodge_timeout
 
         if self.has_flipped:
             self.flip_time += time_elapsed
