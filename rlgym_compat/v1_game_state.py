@@ -34,6 +34,10 @@ class V1GameState:
         self._player_infos: Dict[int, PlayerInfo] = {}
         self._boost_pickups: Dict[int, int] = {}
         self._players: Optional[List[V1PlayerData]] = None
+        self._ball: Optional[V1PhysicsObject] = None
+        self._inverted_ball: Optional[V1PhysicsObject] = None
+        self._boost_pads: Optional[np.ndarray] = None
+        self._inverted_boost_pads: Optional[np.ndarray] = None
 
     @property
     def players(self):
@@ -58,24 +62,52 @@ class V1GameState:
 
     @property
     def ball(self):
-        return V1PhysicsObject.create_from_v2(self._game_state.ball)
+        if self._ball is None:
+            return V1PhysicsObject.create_from_v2(self._game_state.ball)
+        return self._ball
+
+    @ball.setter
+    def ball(self, value: V1PhysicsObject):
+        self._ball = value
 
     @property
     def inverted_ball(self):
-        return V1PhysicsObject.create_from_v2(self._game_state.inverted_ball)
+        if self._inverted_ball is None:
+            return V1PhysicsObject.create_from_v2(self._game_state.inverted_ball)
+        return self._inverted_ball
+
+    @inverted_ball.setter
+    def inverted_ball(self, value: V1PhysicsObject):
+        self._inverted_ball = value
 
     @property
     def boost_pads(self):
-        return (self._game_state.boost_pad_timers == 0).astype(np.float32)
+        if self._boost_pads is None:
+            return (self._game_state.boost_pad_timers == 0).astype(np.float32)
+        return self._boost_pads
+
+    @boost_pads.setter
+    def boost_pads(self, value: np.ndarray):
+        self._boost_pads = value
 
     @property
     def inverted_boost_pads(self):
-        return (self._game_state.inverted_boost_pad_timers == 0).astype(np.float32)
+        if self._inverted_boost_pads is None:
+            return (self._game_state.inverted_boost_pad_timers == 0).astype(np.float32)
+        return self._inverted_boost_pads
+
+    @inverted_boost_pads.setter
+    def inverted_boost_pads(self, value: np.ndarray):
+        self._inverted_boost_pads = value
 
     def update(
         self, packet: GameTickPacket, extra_info: Optional[ExtraPacketInfo] = None
     ):
         self._players = None
+        self._ball = None
+        self._inverted_ball = None
+        self._boost_pads = None
+        self._inverted_boost_pads = None
         self.blue_score = packet.teams[BLUE_TEAM].score
         self.orange_score = packet.teams[ORANGE_TEAM].score
         if len(packet.balls) > 0:
