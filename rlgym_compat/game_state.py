@@ -153,15 +153,10 @@ class GameState:
                 extra_player_info=(
                     None if extra_info is None else extra_info.players[player_index]
                 ),
-                latest_touch=(
-                    None
-                    if ball is None or ball.latest_touch.player_index != player_index
-                    else ball.latest_touch
-                ),
                 ticks_elapsed=ticks_elapsed,
             )
 
-        for boost_pad_index, boost_pad_state in enumerate(packet.boost_pad_states):
+        for boost_pad_index, boost_pad in enumerate(packet.boost_pads):
             self.boost_pad_timers[self._boost_pad_order_mapping[boost_pad_index]] = (
-                boost_pad_state.timer
+                boost_pad.timer
             )

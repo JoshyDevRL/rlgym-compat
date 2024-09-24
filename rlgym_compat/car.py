@@ -180,7 +180,6 @@ class Car:
         self,
         player_info: PlayerInfo,
         extra_player_info: Optional[ExtraPlayerInfo] = None,
-        latest_touch: Optional[Touch] = None,
         ticks_elapsed: int = 1,
     ):
         # Assuming hitbox_type and team_num can't change without updating spawn id (and therefore creating new compat car)
@@ -189,10 +188,11 @@ class Car:
 
         for _ in range(min(self._tick_skip, ticks_elapsed)):
             self._ball_touch_ticks.append(False)
-        if latest_touch is not None:
+        if player_info.latest_touch is not None:
             ticks_since_touch = int(
                 round(
-                    (self._game_seconds - latest_touch.game_seconds) * TICKS_PER_SECOND
+                    (self._game_seconds - player_info.latest_touch.game_seconds)
+                    * TICKS_PER_SECOND
                 )
             )
             if ticks_since_touch < self._tick_skip:
@@ -279,9 +279,9 @@ class Car:
         else:
             self.air_time_since_jump = 0
 
-        # Override with value based on dodge_timeout if it is active, since it is more accurate TODO: it doesn't account for resets so commenting it out
-        # if player_info.dodge_timeout != -1:
-        #     self.air_time_since_jump = DOUBLEJUMP_MAX_DELAY - player_info.dodge_timeout
+        # Override with value based on dodge_timeout if it is active, since it is more accurate
+        if player_info.dodge_timeout != -1:
+            self.air_time_since_jump = DOUBLEJUMP_MAX_DELAY - player_info.dodge_timeout
 
         if self.has_flipped:
             self.flip_time += time_elapsed
