@@ -227,9 +227,17 @@ class SimExtraInfo:
             ball_state = ball.get_state()
             packet_ball = packet.balls[0]
             packet_ball_physics = packet_ball.physics
-            if packet_ball.latest_touch.game_seconds != 0:
+            (latest_touch_player_idx, latest_touch_player_info) = max(
+                enumerate(packet.players),
+                key=lambda item: (
+                    -1
+                    if item[1].latest_touch is None
+                    else item[1].latest_touch.game_seconds
+                ),
+            )
+            if latest_touch_player_info.latest_touch is not None:
                 ball_state.last_hit_car_id = self._spawn_id_car_id_map[
-                    packet.players[packet_ball.latest_touch.player_index].spawn_id
+                    packet.players[latest_touch_player_idx].spawn_id
                 ]
             ball_state.pos = rsim.Vec(
                 packet_ball_physics.location.x,

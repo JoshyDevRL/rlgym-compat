@@ -110,10 +110,19 @@ class V1GameState:
         self._inverted_boost_pads = None
         self.blue_score = packet.teams[BLUE_TEAM].score
         self.orange_score = packet.teams[ORANGE_TEAM].score
-        if len(packet.balls) > 0:
-            ball = packet.balls[0]
-            if ball.latest_touch.player_name:
-                self.last_touch = packet.balls[0].latest_touch.player_index
+        (latest_touch_player_idx, latest_touch_player_info) = max(
+            enumerate(packet.players),
+            key=lambda item: (
+                -1
+                if item[1].latest_touch is None
+                else item[1].latest_touch.game_seconds
+            ),
+        )
+        self.last_touch = (
+            -1
+            if latest_touch_player_info.latest_touch is None
+            else latest_touch_player_idx
+        )
         old_boost_amounts = {
             **{p.spawn_id: p.boost / 100 for p in packet.players},
             **{k: v.boost_amount for (k, v) in self._game_state.cars.items()},
