@@ -132,6 +132,14 @@ class GameState:
                 self.cars[player_info.spawn_id] = Car.create_compat_car(
                     packet, player_index, self._tick_skip
                 )
+        # Remove old players
+        packet_spawn_ids = [player.spawn_id for player in packet.players]
+        agent_ids_to_remove = []
+        for agent_id in self.cars:
+            if agent_id not in packet_spawn_ids:
+                agent_ids_to_remove.append(agent_id)
+        for agent_id in agent_ids_to_remove:
+            self.cars.pop(agent_id)
 
         ticks_elapsed = packet.game_info.frame_num - self.tick_count
         self.tick_count = packet.game_info.frame_num

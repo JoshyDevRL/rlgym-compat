@@ -38,22 +38,23 @@ class V1GameState:
         self._inverted_ball: Optional[V1PhysicsObject] = None
         self._boost_pads: Optional[np.ndarray] = None
         self._inverted_boost_pads: Optional[np.ndarray] = None
+        self._spawn_id_spectator_id_map: Dict[int, int] = {}
 
     @property
     def players(self):
         if self._players is None:
             players: List[V1PlayerData] = []
-            for spawn_idx, car in self._game_state.cars.items():
+            for spawn_id, car in self._game_state.cars.items():
                 players.append(
                     V1PlayerData.create_from_v2(
                         car,
-                        self._player_infos[spawn_idx],
-                        spawn_idx,
-                        self._boost_pickups[spawn_idx],
+                        self._player_infos[spawn_id],
+                        self._spawn_id_spectator_id_map[spawn_id],
+                        self._boost_pickups[spawn_id],
                     )
                 )
-
-            return players
+            players.sort(key=lambda p: p.car_id)
+            self._players = players
         return self._players
 
     @players.setter
@@ -63,7 +64,7 @@ class V1GameState:
     @property
     def ball(self):
         if self._ball is None:
-            return V1PhysicsObject.create_from_v2(self._game_state.ball)
+            self._ball = V1PhysicsObject.create_from_v2(self._game_state.ball)
         return self._ball
 
     @ball.setter
@@ -73,7 +74,9 @@ class V1GameState:
     @property
     def inverted_ball(self):
         if self._inverted_ball is None:
-            return V1PhysicsObject.create_from_v2(self._game_state.inverted_ball)
+            self._inverted_ball = V1PhysicsObject.create_from_v2(
+                self._game_state.inverted_ball
+            )
         return self._inverted_ball
 
     @inverted_ball.setter
@@ -83,7 +86,9 @@ class V1GameState:
     @property
     def boost_pads(self):
         if self._boost_pads is None:
-            return (self._game_state.boost_pad_timers == 0).astype(np.float32)
+            self._boost_pads = (self._game_state.boost_pad_timers == 0).astype(
+                np.float32
+            )
         return self._boost_pads
 
     @boost_pads.setter
@@ -93,21 +98,37 @@ class V1GameState:
     @property
     def inverted_boost_pads(self):
         if self._inverted_boost_pads is None:
-            return (self._game_state.inverted_boost_pad_timers == 0).astype(np.float32)
+            self._inverted_boost_pads = (
+                self._game_state.inverted_boost_pad_timers == 0
+            ).astype(np.float32)
         return self._inverted_boost_pads
 
     @inverted_boost_pads.setter
     def inverted_boost_pads(self, value: np.ndarray):
         self._inverted_boost_pads = value
 
-    def update(
-        self, packet: GameTickPacket, extra_info: Optional[ExtraPacketInfo] = None
-    ):
+    def _clear_cached_properties(self):
         self._players = None
         self._ball = None
         self._inverted_ball = None
         self._boost_pads = None
         self._inverted_boost_pads = None
+
+    def update(
+        self, packet: GameTickPacket, extra_info: Optional[ExtraPacketInfo] = None
+    ):
+        self._clear_cached_properties()
+        self._spawn_id_spectator_id_map = {}
+        blue_spectator_id = 1
+        for player in packet.players:
+            if player.team == BLUE_TEAM:
+                self._spawn_id_spectator_id_map[player.spawn_id] = blue_spectator_id
+                blue_spectator_id += 1
+        orange_spectator_id = max(5, blue_spectator_id)
+        for player in packet.players:
+            if player.team == ORANGE_TEAM:
+                self._spawn_id_spectator_id_map[player.spawn_id] = orange_spectator_id
+                orange_spectator_id += 1
         self.blue_score = packet.teams[BLUE_TEAM].score
         self.orange_score = packet.teams[ORANGE_TEAM].score
         (latest_touch_player_idx, latest_touch_player_info) = max(
