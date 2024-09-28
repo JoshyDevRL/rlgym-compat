@@ -72,7 +72,7 @@ class Car:
     # RLBot Compat specific fields
     _tick_skip: int
     _ball_touch_ticks: deque[bool]  # history for past _tick_skip ticks
-    _prev_air_state: AirState
+    _prev_air_state: int
     _game_seconds: int
 
     __slots__ = tuple(__annotations__)
@@ -168,7 +168,7 @@ class Car:
         car.jump_time = 0
         car._tick_skip = tick_skip
         car._ball_touch_ticks = deque([False] * tick_skip, tick_skip)
-        car._prev_air_state = player_info.air_state
+        car._prev_air_state = int(player_info.air_state)
         car._game_seconds = packet.game_info.seconds_elapsed
         car.flip_torque = np.zeros(3)
         car.physics = PhysicsObject.create_compat_physics_object()
@@ -239,7 +239,7 @@ class Car:
                 self.air_time_since_jump = 0
                 self.flip_time = 0
             case AirState.Jumping:
-                if self._prev_air_state == AirState.OnGround:
+                if self._prev_air_state == int(AirState.OnGround):
                     self.jump_time = 0
                 self.jump_time += TICK_TIME * ticks_elapsed
                 # After pressing jump, it usually takes 6 ticks to leave the ground
@@ -252,7 +252,7 @@ class Car:
             case AirState.Dodging:
                 self.on_ground = False
                 self.is_jumping = False
-                if self._prev_air_state != AirState.Dodging:
+                if self._prev_air_state != int(AirState.Dodging):
                     self.flip_time = 0
                     dodge_dir = np.array(
                         [
@@ -303,4 +303,4 @@ class Car:
             self.autoflip_timer = extra_player_info.autoflip_timer
             self.autoflip_direction = extra_player_info.autoflip_direction
 
-        self._prev_air_state = player_info.air_state
+        self._prev_air_state = int(player_info.air_state)
