@@ -31,7 +31,6 @@ class V1GameState:
         self._inverted_ball: Optional[V1PhysicsObject] = None
         self._boost_pads: Optional[np.ndarray] = None
         self._inverted_boost_pads: Optional[np.ndarray] = None
-        self._spawn_id_spectator_id_map: Dict[int, int] = {}
 
     @property
     def players(self):
@@ -98,17 +97,6 @@ class V1GameState:
         self, packet: GameTickPacket, extra_info: Optional[ExtraPacketInfo] = None
     ):
         self._clear_cached_properties()
-        self._spawn_id_spectator_id_map = {}
-        blue_spectator_id = 1
-        for player in packet.players:
-            if player.team == BLUE_TEAM:
-                self._spawn_id_spectator_id_map[player.spawn_id] = blue_spectator_id
-                blue_spectator_id += 1
-        orange_spectator_id = max(5, blue_spectator_id)
-        for player in packet.players:
-            if player.team == ORANGE_TEAM:
-                self._spawn_id_spectator_id_map[player.spawn_id] = orange_spectator_id
-                orange_spectator_id += 1
         self.blue_score = packet.teams[BLUE_TEAM].score
         self.orange_score = packet.teams[ORANGE_TEAM].score
         (latest_touch_player_idx, latest_touch_player_info) = max(
@@ -129,11 +117,21 @@ class V1GameState:
             **{k: v.boost_amount for (k, v) in self._game_state.cars.items()},
         }
         self._game_state.update(packet, extra_info)
+        spawn_id_spectator_id_map = {}
+        blue_spectator_id = 1
+        for player_info in packet.players:
+            if player_info.team == BLUE_TEAM:
+                spawn_id_spectator_id_map[player_info.spawn_id] = blue_spectator_id
+                blue_spectator_id += 1
+        orange_spectator_id = max(5, blue_spectator_id)
+        for player_info in packet.players:
+            if player_info.team == ORANGE_TEAM:
+                spawn_id_spectator_id_map[player_info.spawn_id] = orange_spectator_id
+                orange_spectator_id += 1
         self._players: List[V1PlayerData] = []
         for player_info in packet.players:
             if player_info.spawn_id not in self._boost_pickups:
                 self._boost_pickups[player_info.spawn_id] = 0
-
             if (
                 packet.game_info.game_state_type
                 in (GameStateType.Active, GameStateType.Kickoff)
@@ -144,9 +142,8 @@ class V1GameState:
                 V1PlayerData.create_from_v2(
                     self._game_state.cars[player_info.spawn_id],
                     player_info,
-                    self._spawn_id_spectator_id_map[player_info.spawn_id],
+                    spawn_id_spectator_id_map[player_info.spawn_id],
                     self._boost_pickups[player_info.spawn_id],
                 )
             )
-
         self._players.sort(key=lambda p: p.car_id)
