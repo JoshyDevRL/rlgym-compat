@@ -1,13 +1,7 @@
 from typing import Dict, List, Optional
 
 import numpy as np
-from rlbot.flat import (
-    FieldInfo,
-    GameStateType,
-    GameTickPacket,
-    MatchSettings,
-    PlayerInfo,
-)
+from rlbot.flat import FieldInfo, GameStateType, GameTickPacket, MatchSettings
 
 from .common_values import BLUE_TEAM, ORANGE_TEAM
 from .extra_info import ExtraPacketInfo
@@ -31,7 +25,6 @@ class V1GameState:
         self.blue_score = 0
         self.orange_score = 0
         self.last_touch: Optional[int] = -1
-        self._player_infos: Dict[int, PlayerInfo] = {}
         self._boost_pickups: Dict[int, int] = {}
         self._players: Optional[List[V1PlayerData]] = None
         self._ball: Optional[V1PhysicsObject] = None
@@ -42,19 +35,6 @@ class V1GameState:
 
     @property
     def players(self):
-        if self._players is None:
-            players: List[V1PlayerData] = []
-            for spawn_id, car in self._game_state.cars.items():
-                players.append(
-                    V1PlayerData.create_from_v2(
-                        car,
-                        self._player_infos[spawn_id],
-                        self._spawn_id_spectator_id_map[spawn_id],
-                        self._boost_pickups[spawn_id],
-                    )
-                )
-            players.sort(key=lambda p: p.car_id)
-            self._players = players
         return self._players
 
     @players.setter
@@ -149,6 +129,7 @@ class V1GameState:
             **{k: v.boost_amount for (k, v) in self._game_state.cars.items()},
         }
         self._game_state.update(packet, extra_info)
+        self._players: List[V1PlayerData] = []
         for player_info in packet.players:
             if player_info.spawn_id not in self._boost_pickups:
                 self._boost_pickups[player_info.spawn_id] = 0
@@ -159,4 +140,13 @@ class V1GameState:
                 and old_boost_amounts[player_info.spawn_id] < player_info.boost / 100
             ):  # This isn't perfect but with decent fps it'll work
                 self._boost_pickups[player_info.spawn_id] += 1
-            self._player_infos[player_info.spawn_id] = player_info
+            self._players.append(
+                V1PlayerData.create_from_v2(
+                    self._game_state.cars[player_info.spawn_id],
+                    player_info,
+                    self._spawn_id_spectator_id_map[player_info.spawn_id],
+                    self._boost_pickups[player_info.spawn_id],
+                )
+            )
+
+        self._players.sort(key=lambda p: p.car_id)

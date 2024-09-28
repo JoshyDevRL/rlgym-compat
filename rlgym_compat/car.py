@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
-from rlbot.flat import AirState, BoxShape, GameTickPacket, PlayerInfo, Touch, Vector3
+from rlbot.flat import AirState, BoxShape, GameTickPacket, PlayerInfo, Vector3
 
 from .common_values import (
     BLUE_TEAM,

@@ -1,9 +1,8 @@
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import numpy as np
 from rlbot.flat import (
-    BoostPad,
     FieldInfo,
     GameStateType,
     GameTickPacket,
