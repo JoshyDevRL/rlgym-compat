@@ -34,7 +34,6 @@ class GameState:
     _tick_skip: int
     # Unless something changes, this mapping will be [14,10,7,12,8,11,29,4,3,15,18,30,1,2,5,6,9,20,19,22,21,23,25,32,31,26,27,24,28,33,17,13,16,0] for the standard map.
     _boost_pad_order_mapping: np.ndarray
-    _boost_pads: List[BoostPad]
 
     __slots__ = tuple(__annotations__)
 
@@ -111,7 +110,6 @@ class GameState:
             state._boost_pad_order_mapping = [
                 idx for idx in range(len(field_info.boost_pads))
             ]
-        state._boost_pads = list(field_info.boost_pads)
         state._first_update_call = True
         return state
 
