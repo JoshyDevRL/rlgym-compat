@@ -17,6 +17,7 @@ class V1GameState:
         match_settings=MatchSettings(),
         tick_skip=8,
         standard_map=True,
+        sort_players_by_car_id=False,
     ):
         self._game_state = GameState.create_compat_game_state(
             field_info, match_settings, tick_skip, standard_map
@@ -26,77 +27,45 @@ class V1GameState:
         self.orange_score = 0
         self.last_touch: Optional[int] = -1
         self._boost_pickups: Dict[int, int] = {}
-        self._players: Optional[List[V1PlayerData]] = None
-        self._ball: Optional[V1PhysicsObject] = None
-        self._inverted_ball: Optional[V1PhysicsObject] = None
-        self._boost_pads: Optional[np.ndarray] = None
-        self._inverted_boost_pads: Optional[np.ndarray] = None
+        self.players: List[V1PlayerData] = []
+        self.ball: V1PhysicsObject = None
+        self.inverted_ball: V1PhysicsObject = None
+        self.boost_pads: np.ndarray = None
+        self.inverted_boost_pads: np.ndarray = None
+        self._sort_players_by_car_id = sort_players_by_car_id
 
-    @property
-    def players(self):
-        return self._players
-
-    @players.setter
-    def players(self, value: List[V1PlayerData]):
-        self._players = value
-
-    @property
-    def ball(self):
-        if self._ball is None:
-            self._ball = V1PhysicsObject.create_from_v2(self._game_state.ball)
-        return self._ball
-
-    @ball.setter
-    def ball(self, value: V1PhysicsObject):
-        self._ball = value
-
-    @property
-    def inverted_ball(self):
-        if self._inverted_ball is None:
-            self._inverted_ball = V1PhysicsObject.create_from_v2(
-                self._game_state.inverted_ball
+    def _recalculate_fields(self):
+        spawn_id_spectator_id_map = {}
+        blue_spectator_id = 1
+        for spawn_id, car in self._game_state.cars.items():
+            if car.team_num == BLUE_TEAM:
+                spawn_id_spectator_id_map[spawn_id] = blue_spectator_id
+                blue_spectator_id += 1
+        orange_spectator_id = max(5, blue_spectator_id)
+        for spawn_id, car in self._game_state.cars.items():
+            if car.team_num == ORANGE_TEAM:
+                spawn_id_spectator_id_map[spawn_id] = orange_spectator_id
+                orange_spectator_id += 1
+        for player_data in self.players:
+            player_data.update_from_v2(
+                self._game_state.cars[player_data.spawn_id],
+                spawn_id_spectator_id_map[player_data.spawn_id],
+                self._boost_pickups[player_data.spawn_id],
             )
-        return self._inverted_ball
-
-    @inverted_ball.setter
-    def inverted_ball(self, value: V1PhysicsObject):
-        self._inverted_ball = value
-
-    @property
-    def boost_pads(self):
-        if self._boost_pads is None:
-            self._boost_pads = (self._game_state.boost_pad_timers == 0).astype(
-                np.float32
-            )
-        return self._boost_pads
-
-    @boost_pads.setter
-    def boost_pads(self, value: np.ndarray):
-        self._boost_pads = value
-
-    @property
-    def inverted_boost_pads(self):
-        if self._inverted_boost_pads is None:
-            self._inverted_boost_pads = (
-                self._game_state.inverted_boost_pad_timers == 0
-            ).astype(np.float32)
-        return self._inverted_boost_pads
-
-    @inverted_boost_pads.setter
-    def inverted_boost_pads(self, value: np.ndarray):
-        self._inverted_boost_pads = value
-
-    def _clear_cached_properties(self):
-        self._players = None
-        self._ball = None
-        self._inverted_ball = None
-        self._boost_pads = None
-        self._inverted_boost_pads = None
+        if self._sort_players_by_car_id:
+            self.players.sort(key=lambda p: p.car_id)
+        self.ball = V1PhysicsObject.create_from_v2(self._game_state.ball)
+        self.inverted_ball = V1PhysicsObject.create_from_v2(
+            self._game_state.inverted_ball
+        )
+        self.boost_pads = (self._game_state.boost_pad_timers == 0).astype(np.float32)
+        self.inverted_boost_pads = (
+            self._game_state.inverted_boost_pad_timers == 0
+        ).astype(np.float32)
 
     def update(
         self, packet: GameTickPacket, extra_info: Optional[ExtraPacketInfo] = None
     ):
-        self._clear_cached_properties()
         self.blue_score = packet.teams[BLUE_TEAM].score
         self.orange_score = packet.teams[ORANGE_TEAM].score
         (latest_touch_player_idx, latest_touch_player_info) = max(
@@ -117,18 +86,7 @@ class V1GameState:
             **{k: v.boost_amount for (k, v) in self._game_state.cars.items()},
         }
         self._game_state.update(packet, extra_info)
-        spawn_id_spectator_id_map = {}
-        blue_spectator_id = 1
-        for player_info in packet.players:
-            if player_info.team == BLUE_TEAM:
-                spawn_id_spectator_id_map[player_info.spawn_id] = blue_spectator_id
-                blue_spectator_id += 1
-        orange_spectator_id = max(5, blue_spectator_id)
-        for player_info in packet.players:
-            if player_info.team == ORANGE_TEAM:
-                spawn_id_spectator_id_map[player_info.spawn_id] = orange_spectator_id
-                orange_spectator_id += 1
-        self._players: List[V1PlayerData] = []
+        self.players: List[V1PlayerData] = []
         for player_info in packet.players:
             if player_info.spawn_id not in self._boost_pickups:
                 self._boost_pickups[player_info.spawn_id] = 0
@@ -138,12 +96,5 @@ class V1GameState:
                 and old_boost_amounts[player_info.spawn_id] < player_info.boost / 100
             ):  # This isn't perfect but with decent fps it'll work
                 self._boost_pickups[player_info.spawn_id] += 1
-            self._players.append(
-                V1PlayerData.create_from_v2(
-                    self._game_state.cars[player_info.spawn_id],
-                    player_info,
-                    spawn_id_spectator_id_map[player_info.spawn_id],
-                    self._boost_pickups[player_info.spawn_id],
-                )
-            )
-        self._players.sort(key=lambda p: p.car_id)
+            self.players.append(V1PlayerData.create_base(player_info))
+        self._recalculate_fields()
