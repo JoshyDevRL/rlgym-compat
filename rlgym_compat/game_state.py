@@ -21,7 +21,6 @@ class GameState:
         self._ticks_since_flip = np.zeros(self._total_players)
         self._air_time_since_jump_ended = np.zeros(self._total_players)
         self._used_double_jump_or_flip = [False for _ in range(self._total_players)]
-        self._last_ball_touched_time = np.zeros(self._total_players)
 
         self.ball: PhysicsObject = PhysicsObject()
         self.inverted_ball: PhysicsObject = PhysicsObject()
@@ -71,12 +70,6 @@ class GameState:
             )
             self._air_time_since_jump_ended = new_air_time_since_jump_ended
 
-            new_last_ball_touched_time = np.zeros(2 * self._total_players)
-            new_last_ball_touched_time[: self._total_players] = (
-                self._last_ball_touched_time
-            )
-            self._last_ball_touched_time = new_last_ball_touched_time
-
             new_used_double_jump_or_flip = [
                 False for _ in range(2 * self._total_players)
             ]
@@ -101,7 +94,7 @@ class GameState:
         self.orange_score = packet.teams[1].score
 
         # Set boost pads
-        for i, pad in enumerate(packet.boost_pad_states):
+        for i, pad in enumerate(packet.boost_pads):
             self.boost_pads[self._boost_pad_order_mapping[i]] = pad.is_active
         self.inverted_boost_pads[:] = self.boost_pads[::-1]
 
@@ -111,22 +104,14 @@ class GameState:
             self.ball.decode_ball_data(ball.physics)
             self.inverted_ball.invert(self.ball)
 
-            # Set up touch tracking
-            latest_touch = ball.latest_touch
-            if latest_touch.game_seconds > 0:
-                self.last_touch = latest_touch.player_index
-            self._last_ball_touched_time[latest_touch.player_index] = (
-                latest_touch.game_seconds
-            )
-
         # Set players
         self.players = []
         for i, player in enumerate(packet.players):
             player_data = self._decode_player(player, i, ticks_elapsed)
             # Need to set player data ball touched only if player has touched ball in the last tick_skip ticks
             if (
-                self._last_ball_touched_time[i] > 0
-                and packet.game_info.seconds_elapsed - self._last_ball_touched_time[i]
+                player.latest_touch is not None
+                and packet.game_info.seconds_elapsed - player.latest_touch.game_seconds
                 < self.tick_skip_time
             ):
                 player_data.ball_touched = True
