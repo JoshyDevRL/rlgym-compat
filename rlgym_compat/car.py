@@ -241,9 +241,6 @@ class Car:
             case AirState.Jumping:
                 if self._prev_air_state == int(AirState.OnGround):
                     self.jump_time = 0
-                self.jump_time += TICK_TIME * ticks_elapsed
-                # After pressing jump, it usually takes 6 ticks to leave the ground
-                self.on_ground = self.jump_time > 6 * TICK_TIME
                 self.is_jumping = True
                 self.has_jumped = True
             case AirState.InAir:
@@ -274,14 +271,19 @@ class Car:
                 self.is_jumping = False
                 self.has_double_jumped = True
 
+        if self.has_jumped or self.is_jumping:
+            self.jump_time += TICK_TIME * ticks_elapsed
+            # After pressing jump, it usually takes 6 ticks to leave the ground
+            self.on_ground = self.jump_time > 6 * TICK_TIME
+
         if self.has_jumped and not self.is_jumping:
             self.air_time_since_jump += time_elapsed
         else:
             self.air_time_since_jump = 0
 
-        # Override with value based on dodge_timeout if it is active, since it is more accurate
-        if player_info.dodge_timeout != -1:
-            self.air_time_since_jump = DOUBLEJUMP_MAX_DELAY - player_info.dodge_timeout
+        # Override with value based on dodge_timeout if it is active, since it is more accurate TODO: nope, still broken
+        # if player_info.dodge_timeout != -1:
+        #     self.air_time_since_jump = DOUBLEJUMP_MAX_DELAY - player_info.dodge_timeout
 
         if self.has_flipped:
             self.flip_time += time_elapsed
