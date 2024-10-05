@@ -155,10 +155,10 @@ class GameState:
         for player_index, player_info in enumerate(packet.players):
             self.cars[player_info.spawn_id].update(
                 player_info,
+                packet.game_info.frame_num,
                 extra_player_info=(
                     None if extra_info is None else extra_info.players[player_index]
                 ),
-                ticks_elapsed=ticks_elapsed,
             )
 
         for boost_pad_index, boost_pad in enumerate(packet.boost_pads):

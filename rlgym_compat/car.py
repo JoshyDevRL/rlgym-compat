@@ -74,6 +74,7 @@ class Car:
     _ball_touch_ticks: deque[bool]  # history for past _tick_skip ticks
     _prev_air_state: int
     _game_seconds: int
+    _cur_tick: int
 
     __slots__ = tuple(__annotations__)
 
@@ -170,6 +171,7 @@ class Car:
         car._ball_touch_ticks = deque([False] * tick_skip, tick_skip)
         car._prev_air_state = int(player_info.air_state)
         car._game_seconds = packet.game_info.seconds_elapsed
+        car._cur_tick = packet.game_info.frame_num
         car.flip_torque = np.zeros(3)
         car.physics = PhysicsObject.create_compat_physics_object()
         return car
@@ -179,10 +181,12 @@ class Car:
     def update(
         self,
         player_info: PlayerInfo,
+        game_tick: int,
         extra_player_info: Optional[ExtraPlayerInfo] = None,
-        ticks_elapsed: int = 1,
     ):
         # Assuming hitbox_type and team_num can't change without updating spawn id (and therefore creating new compat car)
+        ticks_elapsed = game_tick - self._cur_tick
+        self._cur_tick = game_tick
         time_elapsed = TICK_TIME * ticks_elapsed
         self._game_seconds += time_elapsed
 
@@ -274,7 +278,7 @@ class Car:
         if self.has_jumped or self.is_jumping:
             self.jump_time += TICK_TIME * ticks_elapsed
             # After pressing jump, it usually takes 6 ticks to leave the ground
-            self.on_ground = self.jump_time > 6 * TICK_TIME
+            self.on_ground = self.jump_time <= 6 * TICK_TIME
 
         if self.has_jumped and not self.is_jumping:
             self.air_time_since_jump += time_elapsed
