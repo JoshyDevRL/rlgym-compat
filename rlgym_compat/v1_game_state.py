@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional
 
 import numpy as np
-from rlbot.flat import FieldInfo, GameStateType, GameTickPacket, MatchSettings
+from rlbot.flat import FieldInfo, GamePacket, GameStatus, MatchSettings
 
 from .common_values import BLUE_TEAM, ORANGE_TEAM
 from .extra_info import ExtraPacketInfo
@@ -63,9 +63,7 @@ class V1GameState:
             self._game_state.inverted_boost_pad_timers == 0
         ).astype(np.float32)
 
-    def update(
-        self, packet: GameTickPacket, extra_info: Optional[ExtraPacketInfo] = None
-    ):
+    def update(self, packet: GamePacket, extra_info: Optional[ExtraPacketInfo] = None):
         self.blue_score = packet.teams[BLUE_TEAM].score
         self.orange_score = packet.teams[ORANGE_TEAM].score
         (latest_touch_player_idx, latest_touch_player_info) = max(
@@ -91,8 +89,7 @@ class V1GameState:
             if player_info.spawn_id not in self._boost_pickups:
                 self._boost_pickups[player_info.spawn_id] = 0
             if (
-                packet.game_info.game_state_type
-                in (GameStateType.Active, GameStateType.Kickoff)
+                packet.game_info.game_status in (GameStatus.Active, GameStatus.Kickoff)
                 and old_boost_amounts[player_info.spawn_id] < player_info.boost / 100
             ):  # This isn't perfect but with decent fps it'll work
                 self._boost_pickups[player_info.spawn_id] += 1

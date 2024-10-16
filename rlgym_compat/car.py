@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
-from rlbot.flat import AirState, BoxShape, GameTickPacket, PlayerInfo, Vector3
+from rlbot.flat import AirState, BoxShape, GamePacket, PlayerInfo, Vector3
 
 from .common_values import (
     BLUE_TEAM,
@@ -108,7 +108,7 @@ class Car:
             and self.air_time_since_jump < DOUBLEJUMP_MAX_DELAY
         )
 
-    @property  # TODO This one isn't in rsim python yet, emulate with prop
+    @property
     def is_flipping(self) -> bool:
         return self.has_flipped and self.flip_time < FLIP_TORQUE_TIME
 
@@ -155,29 +155,46 @@ class Car:
         return OCTANE
 
     @staticmethod
-    def create_compat_car(packet: GameTickPacket, player_index: int, tick_skip: int):
+    def create_compat_car(packet: GamePacket, player_index: int, tick_skip: int):
         player_info = packet.players[player_index]
         car = Car()
         car.team_num = BLUE_TEAM if player_info.team == 0 else ORANGE_TEAM
         car.hitbox_type = Car.detect_hitbox(
             player_info.hitbox, player_info.hitbox_offset
         )
+        car.ball_touches = 0
+        car.bump_victim_id = None
+        car.demo_respawn_timer = 0
+        car.on_ground = player_info.air_state == AirState.OnGround
         car.supersonic_time = 0
+        car.boost_amount = player_info.boost / 100
         car.boost_active_time = 0
         car.handbrake = 0
-        car.has_jumped = False
+        car.has_jumped = player_info.has_jumped
+        car.is_holding_jump = player_info.last_input.jump
+        car.is_jumping = False
         car.jump_time = 0
+        car.has_flipped = player_info.has_dodged
+        car.has_double_jumped = player_info.has_double_jumped
+        if player_info.dodge_timeout == -1:
+            car.air_time_since_jump = 0
+        else:
+            car.air_time_since_jump = DOUBLEJUMP_MAX_DELAY - player_info.dodge_timeout
+        car.flip_time = player_info.dodge_elapsed
+        car.flip_torque = np.array(
+            [-player_info.dodge_dir.y, player_info.dodge_dir.x, 0]
+        )
+        car.is_autoflipping = False
+        car.autoflip_timer = 0
+        car.autoflip_direction = 0
+        car.physics = PhysicsObject.create_compat_physics_object()
         car._tick_skip = tick_skip
         car._ball_touch_ticks = deque([False] * tick_skip, tick_skip)
         car._prev_air_state = int(player_info.air_state)
         car._game_seconds = packet.game_info.seconds_elapsed
         car._cur_tick = packet.game_info.frame_num
-        car.flip_torque = np.zeros(3)
-        car.physics = PhysicsObject.create_compat_physics_object()
         return car
 
-    # Latest touch should only be passed if the player index of the touch is equal to the current player. Player indices can change in a packet
-    # so this is not the responsibility of the Car.
     def update(
         self,
         player_info: PlayerInfo,
@@ -233,64 +250,45 @@ class Car:
 
         self.is_holding_jump = player_info.last_input.jump
 
+        self.has_jumped = player_info.has_jumped
+        self.has_double_jumped = player_info.has_double_jumped
+        self.has_flipped = player_info.has_dodged
+        self.flip_time = player_info.dodge_elapsed
+        self.flip_torque[0] = -player_info.dodge_dir.y
+        self.flip_torque[1] = player_info.dodge_dir.x
+        if self.has_jumped or self.is_jumping:
+            self.jump_time += TICK_TIME * ticks_elapsed
+        if player_info.dodge_timeout == -1:
+            self.air_time_since_jump = 0
+        else:
+            self.air_time_since_jump = DOUBLEJUMP_MAX_DELAY - player_info.dodge_timeout
+
         match player_info.air_state:
             case AirState.OnGround:
                 self.on_ground = True
                 self.is_jumping = False
-                self.has_jumped &= self.jump_time < MIN_JUMP_TIME + JUMP_RESET_TIME_PAD
-                self.has_flipped = False
-                self.has_double_jumped = False
                 self.air_time_since_jump = 0
-                self.flip_time = 0
             case AirState.Jumping:
                 if self._prev_air_state == int(AirState.OnGround):
                     self.jump_time = 0
+                # After pressing jump, it usually takes 6 ticks to leave the ground. This is the only air state where we are uncertain if we are on the ground or not.
+                self.on_ground = self.jump_time <= 6 * TICK_TIME
                 self.is_jumping = True
-                self.has_jumped = True
             case AirState.InAir:
                 self.on_ground = False
                 self.is_jumping = False
             case AirState.Dodging:
                 self.on_ground = False
                 self.is_jumping = False
-                if self._prev_air_state != int(AirState.Dodging):
-                    self.flip_time = 0
-                    dodge_dir = np.array(
-                        [
-                            -player_info.last_input.pitch,
-                            player_info.last_input.yaw + player_info.last_input.roll,
-                            0,
-                        ]
-                    )
-                    if (dodge_dir < 0.1).all():
-                        dodge_dir *= 0
-                    else:
-                        dodge_dir /= np.sqrt(
-                            dodge_dir[0] * dodge_dir[0] + dodge_dir[1] * dodge_dir[1]
-                        )
-                    self.flip_torque = np.array([-dodge_dir[1], dodge_dir[0], 0])
-                    self.has_flipped = True
             case AirState.DoubleJumping:
                 self.on_ground = False
                 self.is_jumping = False
-                self.has_double_jumped = True
 
-        if self.has_jumped or self.is_jumping:
-            self.jump_time += TICK_TIME * ticks_elapsed
-            # After pressing jump, it usually takes 6 ticks to leave the ground
-            self.on_ground = self.jump_time <= 6 * TICK_TIME
-
-        if self.has_jumped and not self.is_jumping:
-            self.air_time_since_jump += time_elapsed
-        else:
-            self.air_time_since_jump = 0
-
-        # Override with value based on dodge_timeout if it is active, since it is more accurate TODO: nope, still broken
-        # if player_info.dodge_timeout != -1:
-        #     self.air_time_since_jump = DOUBLEJUMP_MAX_DELAY - player_info.dodge_timeout
-
-        if self.has_flipped:
-            self.flip_time += time_elapsed
+        # TODO: remove?
+        # if self.has_jumped and not self.is_jumping:
+        #     self.air_time_since_jump += time_elapsed
+        # else:
+        #     self.air_time_since_jump = 0
 
         self.physics.update(player_info.physics)
         self._inverted_physics = self.physics.inverted()

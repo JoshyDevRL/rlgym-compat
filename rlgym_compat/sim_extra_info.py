@@ -10,8 +10,8 @@ from rlbot.flat import (
     FieldInfo,
     GameEventOption,
     GameMode,
+    GamePacket,
     GameSpeedOption,
-    GameTickPacket,
     GravityOption,
     MatchSettings,
     MultiBall,
@@ -186,7 +186,7 @@ class SimExtraInfo:
             players.append(self._get_extra_player_info(car))
         return ExtraPacketInfo(players=players, ball=self._get_extra_ball_info())
 
-    def get_extra_info(self, packet: GameTickPacket) -> ExtraPacketInfo:
+    def get_extra_info(self, packet: GamePacket) -> ExtraPacketInfo:
         self._update_sim_cars(packet)
         if self._first_call:
             self._first_call = False
@@ -221,7 +221,7 @@ class SimExtraInfo:
         self._set_sim_state(packet)
         return self._get_extra_packet_info()
 
-    def _set_ball_state(self, packet: GameTickPacket):
+    def _set_ball_state(self, packet: GamePacket):
         if len(packet.balls) > 0:
             ball = self._arena.ball
             ball_state = ball.get_state()
@@ -298,7 +298,7 @@ class SimExtraInfo:
             not in self._current_car_ids
         )
 
-    def _update_sim_cars(self, packet: GameTickPacket):
+    def _update_sim_cars(self, packet: GamePacket):
         # Add data cars that are newly in the packet
         for player_info in packet.players:
             if self._is_new_car(player_info):
@@ -319,7 +319,7 @@ class SimExtraInfo:
                 self._touches.pop(car_id, None)
                 self._ball_touched_on_tick.pop(car_id, None)
 
-    def _set_sim_state(self, packet: GameTickPacket):
+    def _set_sim_state(self, packet: GamePacket):
         for player_info in packet.players:
             if not self._is_new_car(player_info):
                 self._set_car_state(player_info, False)

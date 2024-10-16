@@ -2,13 +2,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 import numpy as np
-from rlbot.flat import (
-    FieldInfo,
-    GameStateType,
-    GameTickPacket,
-    GravityOption,
-    MatchSettings,
-)
+from rlbot.flat import FieldInfo, GamePacket, GameStatus, GravityOption, MatchSettings
 
 from .car import Car
 from .common_values import BOOST_LOCATIONS
@@ -114,7 +108,7 @@ class GameState:
 
     def update(
         self,
-        packet: GameTickPacket,
+        packet: GamePacket,
         extra_info: Optional[ExtraPacketInfo] = None,
     ):
         doing_first_call = False
@@ -144,7 +138,7 @@ class GameState:
         if ticks_elapsed == 0 and not doing_first_call:
             return
 
-        self.goal_scored = packet.game_info.game_state_type == GameStateType.GoalScored
+        self.goal_scored = packet.game_info.game_status == GameStatus.GoalScored
 
         if len(packet.balls) > 0:
             ball = packet.balls[0]
