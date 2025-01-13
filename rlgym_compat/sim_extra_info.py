@@ -3,21 +3,21 @@ from typing import Dict
 
 import RocketSim as rsim
 from rlbot.flat import (
-    BallTypeOption,
-    BoostOption,
-    BoostStrengthOption,
-    DemolishOption,
+    BallTypeMutator,
+    BoostMutator,
+    BoostStrengthMutator,
+    DemolishMutator,
     FieldInfo,
-    GameEventOption,
+    GameEventMutator,
     GameMode,
     GamePacket,
-    GameSpeedOption,
-    GravityOption,
-    MatchSettings,
-    MultiBall,
+    GameSpeedMutator,
+    GravityMutator,
+    MatchConfiguration,
+    MultiBallMutator,
     PlayerInfo,
-    RespawnTimeOption,
-    RumbleOption,
+    RespawnTimeMutator,
+    RumbleMutator
 )
 
 from .car import Car
@@ -28,7 +28,7 @@ from .utils import rotator_to_numpy, vector_to_numpy
 
 class SimExtraInfo:
     def __init__(
-        self, field_info: FieldInfo, match_settings=MatchSettings(), tick_skip=8
+        self, field_info: FieldInfo, match_settings=MatchConfiguration(), tick_skip=8
     ):
         match match_settings.game_mode:
             case GameMode.Soccer:
@@ -44,99 +44,99 @@ class SimExtraInfo:
         # TODO: ensure the boost pads are right
 
         # Ensure there are no mutators configured that we can't support
-        mutators = match_settings.mutator_settings
+        mutators = match_settings.mutators
         if mutators is not None:
             mutator_config = {}
             assert (
-                mutators.multi_ball == MultiBall.One
+                mutators.multi_ball == MultiBallMutator.One
             ), "Can only use one ball with sim"
 
             assert (
-                mutators.game_speed_option == GameSpeedOption.Default
+                mutators.game_speed == GameSpeedMutator.Default
             ), "Can only use default game speed with sim"
 
-            match mutators.ball_type_option:
-                case BallTypeOption.Default:
+            match mutators.ball_type:
+                case BallTypeMutator.Default:
                     assert (
                         match_settings.game_mode == GameMode.Soccer
                     ), "Cannot use non-soccer ball in soccer with sim"
-                case BallTypeOption.Puck:
+                case BallTypeMutator.Puck:
                     assert (
                         match_settings.game_mode == GameMode.Hockey
                     ), "Cannot use non-puck ball in hockey with sim"
-                case BallTypeOption.Basketball:
+                case BallTypeMutator.Basketball:
                     assert (
                         match_settings.game_mode == GameMode.Hoops
                     ), "Cannot use non-basketball ball in hoops with sim"
                 case _:
-                    raise NotImplementedError(mutators.ball_type_option)
+                    raise NotImplementedError(mutators.ball_type)
 
-            match mutators.boost_option:
-                case BoostOption.Normal_Boost:
+            match mutators.boost:
+                case BoostMutator.NormalBoost:
                     pass
-                case BoostOption.Unlimited_Boost:
+                case BoostMutator.UnlimitedBoost:
                     mutator_config["boost_used_per_second"] = 0
                     mutator_config["car_spawn_boost_amount"] = 100
-                case BoostOption.No_Boost:
+                case BoostMutator.NoBoost:
                     mutator_config["boost_accel"] = 0
                     print(
                         "Warning: No Boost boost option support is an experimental feature"
                     )
                 case _:
-                    raise NotImplementedError(mutators.boost_option)
+                    raise NotImplementedError(mutators.boost)
 
             assert (
-                mutators.rumble_option == RumbleOption.No_Rumble
+                mutators.rumble == RumbleMutator.NoRumble
             ), "Rumble is unsupported by sim"
 
-            match mutators.boost_strength_option:
-                case BoostStrengthOption.One:
+            match mutators.boost_strength:
+                case BoostStrengthMutator.One:
                     pass
-                case BoostStrengthOption.OneAndAHalf:
+                case BoostStrengthMutator.OneAndAHalf:
                     mutator_config["boost_accel"] = 21.2 * 1.5
-                case BoostStrengthOption.Two:
+                case BoostStrengthMutator.Two:
                     mutator_config["boost_accel"] = 21.2 * 2
-                case BoostStrengthOption.Five:
+                case BoostStrengthMutator.Five:
                     mutator_config["boost_accel"] = 21.2 * 5
-                case BoostStrengthOption.Ten:
+                case BoostStrengthMutator.Ten:
                     mutator_config["boost_accel"] = 21.2 * 10
 
-            match mutators.gravity_option:
-                case GravityOption.Default:
+            match mutators.gravity:
+                case GravityMutator.Default:
                     grav_z = -650
-                case GravityOption.Low:
+                case GravityMutator.Low:
                     grav_z = -325.0
-                case GravityOption.High:
+                case GravityMutator.High:
                     grav_z = -1137.5
-                case GravityOption.Super_High:
+                case GravityMutator.SuperHigh:
                     grav_z = -3250
-                case GravityOption.Reverse:
+                case GravityMutator.Reverse:
                     grav_z = 650
             mutator_config["gravity"] = rsim.Vec(0, 0, grav_z)
 
-            match mutators.demolish_option:
-                case DemolishOption.Default:
+            match mutators.demolish:
+                case DemolishMutator.Default:
                     pass
-                case DemolishOption.Disabled:
+                case DemolishMutator.Disabled:
                     mutator_config["demo_mode"] = rsim.DemoMode.DISABLED
-                case DemolishOption.On_Contact:
+                case DemolishMutator.OnContact:
                     mutator_config["demo_mode"] = rsim.DemoMode.ON_CONTACT
                 case _:
-                    raise NotImplementedError(mutators.demolish_option)
+                    raise NotImplementedError(mutators.demolish)
 
-            match mutators.respawn_time_option:
-                case RespawnTimeOption.Three_Seconds:
+            match mutators.respawn_time:
+                case RespawnTimeMutator.ThreeSeconds:
                     pass
-                case RespawnTimeOption.Two_Seconds:
+                case RespawnTimeMutator.TwoSeconds:
                     mutator_config["respawn_delay"] = 2.0
-                case RespawnTimeOption.One_Second:
+                case RespawnTimeMutator.OneSecond:
                     mutator_config["respawn_delay"] = 1.0
                 case _:
-                    raise NotImplementedError(mutators.respawn_time_option)
+                    raise NotImplementedError(mutators.respawn_time)
 
             assert (
-                mutators.game_event_option == GameEventOption.Default
-            ), f"game event option {mutators.game_event_option} is unsupported by sim"
+                mutators.game_event == GameEventMutator.Default
+            ), f"game event option {mutators.game_event} is unsupported by sim"
 
             # TODO: BallMaxSpeedOption
             # TODO: BallWeightOption
@@ -190,12 +190,12 @@ class SimExtraInfo:
         self._update_sim_cars(packet)
         if self._first_call:
             self._first_call = False
-            self._tick_count = packet.game_info.frame_num
+            self._tick_count = packet.match_info.frame_num
             self._set_sim_state(packet)
             return self._get_extra_packet_info()
 
-        ticks_elapsed = packet.game_info.frame_num - self._tick_count
-        self._tick_count = packet.game_info.frame_num
+        ticks_elapsed = packet.match_info.frame_num - self._tick_count
+        self._tick_count = packet.match_info.frame_num
         spawn_id_player_info_map = {
             player_info.spawn_id: player_info for player_info in packet.players
         }

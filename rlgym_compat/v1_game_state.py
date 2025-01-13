@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional
 
 import numpy as np
-from rlbot.flat import FieldInfo, GamePacket, GameStatus, MatchSettings
+from rlbot.flat import FieldInfo, GamePacket, MatchConfiguration, MatchPhase
 
 from .common_values import BLUE_TEAM, ORANGE_TEAM
 from .extra_info import ExtraPacketInfo
@@ -14,7 +14,7 @@ class V1GameState:
     def __init__(
         self,
         field_info: FieldInfo,
-        match_settings=MatchSettings(),
+        match_settings=MatchConfiguration(),
         tick_skip=8,
         standard_map=True,
         sort_players_by_car_id=False,
@@ -89,7 +89,7 @@ class V1GameState:
             if player_info.spawn_id not in self._boost_pickups:
                 self._boost_pickups[player_info.spawn_id] = 0
             if (
-                packet.game_info.game_status in (GameStatus.Active, GameStatus.Kickoff)
+                packet.match_info.match_phase in (MatchPhase.Active, MatchPhase.Kickoff)
                 and old_boost_amounts[player_info.spawn_id] < player_info.boost / 100
             ):  # This isn't perfect but with decent fps it'll work
                 self._boost_pickups[player_info.spawn_id] += 1
