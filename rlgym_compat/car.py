@@ -191,8 +191,8 @@ class Car:
         car._tick_skip = tick_skip
         car._ball_touch_ticks = deque([False] * tick_skip, tick_skip)
         car._prev_air_state = int(player_info.air_state)
-        car._game_seconds = packet.game_info.seconds_elapsed
-        car._cur_tick = packet.game_info.frame_num
+        car._game_seconds = packet.match_info.seconds_elapsed
+        car._cur_tick = packet.match_info.frame_num
         return car
 
     def update(

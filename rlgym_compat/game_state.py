@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 import numpy as np
-from rlbot.flat import FieldInfo, GamePacket, GameStatus, GravityOption, MatchSettings
+from rlbot.flat import FieldInfo, GamePacket, GravityMutator, MatchConfiguration, MatchPhase
 
 from .car import Car
 from .common_values import BOOST_LOCATIONS
@@ -53,7 +53,7 @@ class GameState:
     @staticmethod
     def create_compat_game_state(
         field_info: FieldInfo,
-        match_settings=MatchSettings(),
+        match_settings=MatchConfiguration(),
         tick_skip=8,
         standard_map=True,
     ):
@@ -64,17 +64,17 @@ class GameState:
         state.config = GameConfig()
         state.config.boost_consumption = 1  # Not modifiable
         state.config.dodge_deadzone = 0.5  # Not modifiable
-        if match_settings.mutator_settings is not None:
-            match match_settings.mutator_settings.gravity_option:
-                case GravityOption.Low:
+        if match_settings.mutators is not None:
+            match match_settings.mutators.gravity:
+                case GravityMutator.Low:
                     gravity = -325
-                case GravityOption.Default:
+                case GravityMutator.Default:
                     gravity = -650
-                case GravityOption.High:
+                case GravityMutator.High:
                     gravity = -1137.5
-                case GravityOption.Super_High:
+                case GravityMutator.SuperHigh:
                     gravity = -3250
-                case GravityOption.Reverse:
+                case GravityMutator.Reverse:
                     gravity = 650
             state.config.gravity = gravity / -650.0
         else:
@@ -113,7 +113,7 @@ class GameState:
     ):
         doing_first_call = False
         if self._first_update_call:
-            self.tick_count = packet.game_info.frame_num
+            self.tick_count = packet.match_info.frame_num
             self._first_update_call = False
             doing_first_call = True
 
@@ -132,13 +132,13 @@ class GameState:
         for agent_id in agent_ids_to_remove:
             self.cars.pop(agent_id)
 
-        ticks_elapsed = packet.game_info.frame_num - self.tick_count
-        self.tick_count = packet.game_info.frame_num
+        ticks_elapsed = packet.match_info.frame_num - self.tick_count
+        self.tick_count = packet.match_info.frame_num
         # Nothing to do
         if ticks_elapsed == 0 and not doing_first_call:
             return
 
-        self.goal_scored = packet.game_info.game_status == GameStatus.GoalScored
+        self.goal_scored = packet.match_info.match_phase == MatchPhase.GoalScored
 
         if len(packet.balls) > 0:
             ball = packet.balls[0]
@@ -149,7 +149,7 @@ class GameState:
         for player_index, player_info in enumerate(packet.players):
             self.cars[player_info.spawn_id].update(
                 player_info,
-                packet.game_info.frame_num,
+                packet.match_info.frame_num,
                 extra_player_info=(
                     None if extra_info is None else extra_info.players[player_index]
                 ),
