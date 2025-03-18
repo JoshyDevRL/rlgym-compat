@@ -86,8 +86,8 @@ class GameState:
             self.first_decode_call = False
         else:
             if self.last_frame_num > 0:
-                ticks_elapsed = packet.game_info.frame_num - self.last_frame_num
-        self.last_frame_num = packet.game_info.frame_num
+                ticks_elapsed = packet.match_info.frame_num - self.last_frame_num
+        self.last_frame_num = packet.match_info.frame_num
 
         # Set score
         self.blue_score = packet.teams[0].score
@@ -111,7 +111,7 @@ class GameState:
             # Need to set player data ball touched only if player has touched ball in the last tick_skip ticks
             if (
                 player.latest_touch is not None
-                and packet.game_info.seconds_elapsed - player.latest_touch.game_seconds
+                and packet.match_info.seconds_elapsed - player.latest_touch.game_seconds
                 < self.tick_skip_time
             ):
                 player_data.ball_touched = True
