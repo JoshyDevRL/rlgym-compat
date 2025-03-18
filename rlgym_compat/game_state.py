@@ -1,7 +1,7 @@
 from typing import List, Optional
 
 import numpy as np
-from rlbot.flat import AirState, FieldInfo, GameTickPacket, PlayerInfo
+from rlbot.flat import AirState, FieldInfo, GamePacket, PlayerInfo
 
 from .common_values import BOOST_LOCATIONS
 from .physics_object import PhysicsObject
@@ -53,7 +53,7 @@ class GameState:
             ], f"Boost pad at location {loc} doesn't match any in the standard map (see BOOST_LOCATIONS in common_values.py)"
             self._boost_pad_order_mapping[rlbot_boost_pad_idx] = candidate_idx
 
-    def decode(self, packet: GameTickPacket):
+    def decode(self, packet: GamePacket):
         # Increase number of players' persistent data we are tracking, if necessary
         while self._total_players < len(packet.players):
             new_ticks_since_jump = np.zeros(2 * self._total_players)
